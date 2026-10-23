@@ -13,6 +13,7 @@ import json
 
 from openpyxl import Workbook
 
+from teladoc_bot.azure_link import parse_work_item_link
 from teladoc_bot.config import Config
 from teladoc_bot.sections import REQUIRED_HEADINGS
 
@@ -21,12 +22,27 @@ LINK = "https://dev.azure.com/imex/Retaguarda%20Web/_workitems/edit/{id}"
 
 
 def write_workbook(path: Path, rows: list[list[object]], headers: list[str] | None = None, sheet: str = "Telas") -> None:
+    del headers
     workbook = Workbook()
     worksheet = workbook.active
     worksheet.title = sheet
-    worksheet.append(headers or ["Nome da tela", "Documentação", "Status", "Link Azure", "Observações"])
-    for row in rows:
-        worksheet.append(row)
+    worksheet["A1"] = "Nome da Tela"
+    worksheet["D1"] = "WB de componentização"
+    worksheet["E1"] = "STATUS"
+    worksheet["G1"] = "Documentação"
+    worksheet["H1"] = "Link atividade da Componentização (tela individual)"
+    worksheet["I1"] = "Observações"
+    for index, row in enumerate(rows, start=2):
+        values = list(row) + ["", "", "", "", ""]
+        name, documentation, status, link, notes = values[:5]
+        worksheet.cell(index, 1).value = name
+        parsed = parse_work_item_link(link)
+        if parsed is not None:
+            worksheet.cell(index, 4).value = parsed.id
+        worksheet.cell(index, 6).value = status
+        worksheet.cell(index, 7).value = documentation
+        worksheet.cell(index, 8).value = link or None
+        worksheet.cell(index, 9).value = notes
     workbook.save(path)
     workbook.close()
 

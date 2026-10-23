@@ -7,3 +7,5 @@ output/
 config.json
 .env
 *.xlsx.tmp
+
+.env

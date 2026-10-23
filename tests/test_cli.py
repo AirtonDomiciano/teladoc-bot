@@ -25,7 +25,7 @@ class CliTests(unittest.TestCase):
             with redirect_stderr(stderr):
                 code = main(["run", "--config", str(root / "config.json"), "--codex-bin", str(root / "codex-ausente")])
             workbook = load_workbook(sheet)
-            documentation = workbook.active["B2"].value
+            documentation = workbook.active["G2"].value
             workbook.close()
         self.assertEqual(code, 1)
         self.assertEqual(documentation, "Não")
@@ -65,7 +65,7 @@ class CliTests(unittest.TestCase):
         text = stdout.getvalue()
         self.assertIn("codex-cli test", text)
         self.assertIn("elegível | linha 2 | Clientes | US 10", text)
-        self.assertIn("sem link", text)
+        self.assertIn("link calculado ausente", text)
         self.assertNotIn("token-super-secreto", text)
         self.assertNotIn("token-super-secreto", stderr.getvalue())
 

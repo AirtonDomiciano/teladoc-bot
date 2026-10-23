@@ -1,8 +1,7 @@
-"""Seleção das linhas da planilha e marcação de Documentação = Sim."""
+"""Seleção das linhas da planilha e marcação de Documentação = SIM."""
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,11 +12,17 @@ from teladoc_bot.azure_link import WorkItemRef, parse_work_item_link
 from teladoc_bot.config import ColumnMap, ConfigError
 from teladoc_bot.textutil import normalize
 
-DOCUMENTED_VALUE = "Sim"
+DOCUMENTED_VALUE = "SIM"
 _EMPTY = ""
 _NAO = "nao"
 _CRUD = "crud"
 _HARD_CRUD = "hard crud"
+_NAME = 1
+_US_ID = 4
+_CRUD_KIND = 6
+_DOCUMENTATION = 7
+_AZURE_LINK = 8
+_NOTES = 9
 
 
 @dataclass(frozen=True)
@@ -33,15 +38,15 @@ class SheetRow:
 
 
 def load_rows(path: Path, sheet_name: str | None, header_row: int, columns: ColumnMap) -> list[SheetRow]:
+    del columns
     if not path.is_file():
         raise ConfigError(f"Planilha não encontrada: {path}")
-    workbook = load_workbook(path, data_only=False, keep_vba=path.suffix.lower() == ".xlsm")
+    workbook = load_workbook(path, data_only=True, keep_vba=path.suffix.lower() == ".xlsm")
     try:
         worksheet = _resolve_sheet(workbook, sheet_name)
-        indexes = _column_indexes(worksheet, header_row, columns)
         rows: list[SheetRow] = []
         for excel_row in range(header_row + 1, worksheet.max_row + 1):
-            item = _read_row(worksheet, excel_row, indexes)
+            item = _read_row(worksheet, excel_row)
             if item is None:
                 continue
             rows.append(item)
@@ -58,18 +63,17 @@ def mark_documented(
     excel_row: int,
     expected: WorkItemRef,
 ) -> None:
+    del columns, header_row
     workbook = load_workbook(path, data_only=False, keep_vba=path.suffix.lower() == ".xlsm")
     try:
         worksheet = _resolve_sheet(workbook, sheet_name)
-        indexes = _column_indexes(worksheet, header_row, columns)
-        link = _cell_link(worksheet.cell(excel_row, indexes["azure_link"]))
-        parsed = parse_work_item_link(link)
-        if parsed is None or parsed.key != expected.key:
+        sheet_id = _sheet_id(worksheet.cell(excel_row, _US_ID).value)
+        if sheet_id != expected.id:
             raise ConfigError(
                 "A linha da planilha mudou antes da marcação. "
-                "A US pode já ter sido atualizada, e Documentação permanece Não."
+                "A US pode já ter sido atualizada, e Documentação permanece NÃO."
             )
-        worksheet.cell(excel_row, indexes["documentation"]).value = DOCUMENTED_VALUE
+        worksheet.cell(excel_row, _DOCUMENTATION).value = DOCUMENTED_VALUE
         temporary = path.with_suffix(path.suffix + ".tmp")
         workbook.save(temporary)
     finally:
@@ -90,46 +94,14 @@ def _resolve_sheet(workbook, sheet_name: str | None) -> Worksheet:
     raise ConfigError(f"Aba '{sheet_name}' não encontrada. Abas disponíveis: {available}")
 
 
-def _column_indexes(worksheet: Worksheet, header_row: int, columns: ColumnMap) -> dict[str, int]:
-    found: dict[str, int] = {}
-    seen: dict[str, str] = {}
-    for cell in worksheet[header_row]:
-        header = "" if cell.value is None else str(cell.value)
-        key = normalize(header)
-        if not key:
-            continue
-        if key in seen:
-            raise ConfigError(f"Cabeçalho duplicado na planilha: '{header}'.")
-        seen[key] = header
-    expected = {
-        "screen_name": columns.screen_name,
-        "documentation": columns.documentation,
-        "status": columns.status,
-        "azure_link": columns.azure_link,
-        "notes": columns.notes,
-    }
-    missing = []
-    for field_name, header in expected.items():
-        key = normalize(header)
-        if key not in seen:
-            missing.append(header)
-            continue
-        for cell in worksheet[header_row]:
-            if normalize("" if cell.value is None else str(cell.value)) == key:
-                found[field_name] = cell.column
-                break
-    if missing:
-        raise ConfigError("Colunas não encontradas na planilha: " + ", ".join(missing))
-    return found
-
-
-def _read_row(worksheet: Worksheet, excel_row: int, indexes: dict[str, int]) -> SheetRow | None:
-    screen_name = _text(worksheet.cell(excel_row, indexes["screen_name"]).value)
-    documentation = _text(worksheet.cell(excel_row, indexes["documentation"]).value)
-    status = _text(worksheet.cell(excel_row, indexes["status"]).value)
-    notes = _notes(worksheet.cell(excel_row, indexes["notes"]).value)
-    azure_link = _cell_link(worksheet.cell(excel_row, indexes["azure_link"]))
-    if not any((screen_name, documentation, status, notes, azure_link)):
+def _read_row(worksheet: Worksheet, excel_row: int) -> SheetRow | None:
+    screen_name = _text(worksheet.cell(excel_row, _NAME).value)
+    sheet_id = _sheet_id(worksheet.cell(excel_row, _US_ID).value)
+    status = _text(worksheet.cell(excel_row, _CRUD_KIND).value)
+    documentation = _text(worksheet.cell(excel_row, _DOCUMENTATION).value)
+    azure_link = _text(worksheet.cell(excel_row, _AZURE_LINK).value)
+    notes = _text(worksheet.cell(excel_row, _NOTES).value)
+    if not any((screen_name, sheet_id, status, documentation, azure_link, notes)):
         return None
     work_item = parse_work_item_link(azure_link)
     return SheetRow(
@@ -140,7 +112,7 @@ def _read_row(worksheet: Worksheet, excel_row: int, indexes: dict[str, int]) -> 
         azure_link=azure_link,
         notes=notes,
         work_item=work_item,
-        skip_reason=_skip_reason(screen_name, documentation, status, azure_link, work_item),
+        skip_reason=_skip_reason(screen_name, documentation, status, azure_link, work_item, sheet_id),
     )
 
 
@@ -150,20 +122,41 @@ def _skip_reason(
     status: str,
     azure_link: str,
     work_item: WorkItemRef | None,
+    sheet_id: int | None,
 ) -> str | None:
-    if normalize(documentation) != _NAO:
-        return 'documentação diferente de "Não"'
     normalized_status = normalize(status)
     if normalized_status == _HARD_CRUD:
         return "status HARD CRUD não é processado nesta versão"
     if normalized_status != _CRUD:
         return "status diferente de CRUD"
+    if normalize(documentation) != _NAO:
+        return 'documentação diferente de "NÃO"'
     if not azure_link.strip():
-        return "sem link"
+        return "link calculado ausente"
     if work_item is None:
         return "link inválido de work item do Azure DevOps"
+    if sheet_id is None or work_item.id != sheet_id:
+        return "divergência entre o ID da US e o link Azure"
     if not screen_name.strip():
         return "nome da tela vazio"
+    return None
+
+
+def _sheet_id(value: object) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value if value > 0 else None
+    if isinstance(value, float):
+        if value.is_integer() and value > 0:
+            return int(value)
+        return None
+    text = str(value).replace("\xa0", " ").strip()
+    if text.endswith(".0") and text[:-2].isdigit():
+        text = text[:-2]
+    if text.isdigit():
+        number = int(text)
+        return number if number > 0 else None
     return None
 
 
@@ -171,36 +164,3 @@ def _text(value: object) -> str:
     if value is None:
         return _EMPTY
     return str(value).replace("\xa0", " ").strip()
-
-
-def _notes(value: object) -> str:
-    if value is None:
-        return _EMPTY
-    return str(value).replace("\xa0", " ").strip()
-
-
-def _cell_link(cell) -> str:
-    candidates: list[str] = []
-    hyperlink = getattr(cell, "hyperlink", None)
-    if hyperlink is not None and getattr(hyperlink, "target", None):
-        candidates.append(str(hyperlink.target).strip())
-    if isinstance(cell.value, str):
-        formula = _hyperlink_formula(cell.value)
-        if formula:
-            candidates.append(formula)
-        candidates.append(cell.value.strip())
-    elif cell.value is not None:
-        candidates.append(str(cell.value).strip())
-    for candidate in candidates:
-        if parse_work_item_link(candidate):
-            return candidate
-    return candidates[0] if candidates else _EMPTY
-
-
-def _hyperlink_formula(value: str) -> str | None:
-    if not value.startswith("=") or "HYPERLINK" not in value.upper():
-        return None
-    match = re.search(r'HYPERLINK\(\s*"([^"]+)"', value, flags=re.IGNORECASE)
-    if match:
-        return match.group(1)
-    return None

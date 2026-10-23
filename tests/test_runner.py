@@ -101,8 +101,8 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(report.results[-1].outcome, "publicada")
         self.assertTrue(report.results[-1].marked)
         self.assertEqual(len(azure.updates), 1)
-        self.assertEqual(self._cell("B2"), "Sim")
-        self.assertEqual(self._cell("E2"), "manter o filtro de situação")
+        self.assertEqual(self._cell("G2"), "SIM")
+        self.assertEqual(self._cell("I2"), "manter o filtro de situação")
         prompt = executor.prompts[0]
         self.assertIn("manter o filtro de situação", prompt)
         self.assertIn("Cadastro de clientes", prompt)
@@ -130,7 +130,7 @@ class RunnerTests(unittest.TestCase):
         )
         self.assertEqual(report.exit_code, 2)
         self.assertEqual(report.results[0].outcome, "falha_confirmacao")
-        self.assertEqual(self._cell("B2"), "Não")
+        self.assertEqual(self._cell("G2"), "Não")
         self.assertEqual(len(azure.updates), 1)
 
     def test_local_analysis_does_not_touch_azure_or_the_sheet(self) -> None:
@@ -155,13 +155,13 @@ class RunnerTests(unittest.TestCase):
         )
         self.assertEqual(report.exit_code, 0)
         self.assertEqual(azure.updates, [])
-        self.assertEqual(self._cell("B2"), "Não")
-        self.assertEqual(self._cell("B3"), "Não")
+        self.assertEqual(self._cell("G2"), "Não")
+        self.assertEqual(self._cell("G3"), "Não")
         outcomes = {result.screen_name: result.outcome for result in report.results}
         self.assertEqual(outcomes["Clientes"], "documentada_local")
         self.assertEqual(outcomes["Árduo"], "ignorada")
         self.assertEqual(outcomes["Sem link"], "ignorada")
-        self.assertIn("sem link", report.results[-1].reason)
+        self.assertIn("link calculado ausente", report.results[-1].reason)
 
     def test_failure_continues_and_review_does_not_mark_sim(self) -> None:
         self._sheet(
@@ -181,9 +181,9 @@ class RunnerTests(unittest.TestCase):
         report = execute(config, executor=executor, azure=azure, publish=True, limit=None, only_id=None, log=lambda _m: None)
         self.assertEqual(report.exit_code, 2)
         self.assertEqual([item.outcome for item in report.results], ["pendente", "revisao", "publicada"])
-        self.assertEqual(self._cell("B2"), "Não")
-        self.assertEqual(self._cell("B3"), "Não")
-        self.assertEqual(self._cell("B4"), "Sim")
+        self.assertEqual(self._cell("G2"), "Não")
+        self.assertEqual(self._cell("G3"), "Não")
+        self.assertEqual(self._cell("G4"), "SIM")
         self.assertEqual(len(azure.updates), 1)
         self.assertEqual(len(executor.prompts), 3)
 
@@ -209,8 +209,8 @@ class RunnerTests(unittest.TestCase):
         )
         self.assertEqual(len(executor.prompts), 1)
         self.assertEqual(report.results[1].reason, "work item já processado nesta execução")
-        self.assertEqual(self._cell("B2"), "Sim")
-        self.assertEqual(self._cell("B3"), "Não")
+        self.assertEqual(self._cell("G2"), "SIM")
+        self.assertEqual(self._cell("G3"), "Não")
 
     def test_codex_disappearance_stops_the_loop(self) -> None:
         self._sheet(
@@ -231,8 +231,8 @@ class RunnerTests(unittest.TestCase):
                 only_id=None,
                 log=lambda _m: None,
             )
-        self.assertEqual(self._cell("B2"), "Não")
-        self.assertEqual(self._cell("B3"), "Não")
+        self.assertEqual(self._cell("G2"), "Não")
+        self.assertEqual(self._cell("G3"), "Não")
         summary = json.loads(next(self.output.rglob("resumo.json")).read_text(encoding="utf-8"))
         self.assertEqual(summary["results"][0]["outcome"], "pendente")
         self.assertEqual(len(summary["results"]), 1)
