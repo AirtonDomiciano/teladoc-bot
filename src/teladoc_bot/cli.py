@@ -31,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
                 azure_from_config(config),
                 limit=_limit(args),
                 only_id=getattr(args, "only_id", None),
+                screen_dir=getattr(args, "screen_dir", None),
             )
             return code
         if args.command == "import":
@@ -168,6 +169,10 @@ def _parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--output-dir", help="Substitui o diretório de evidências.")
     collect_parser.add_argument("--limit", type=int, help="Quantidade máxima de telas exportadas nesta coleta.")
     collect_parser.add_argument("--only-id", type=int, help="Exporta somente a US com este ID.")
+    collect_parser.add_argument(
+        "--screen-dir",
+        help="Diretório da tela relativo ao clone. As evidências saem desse diretório.",
+    )
     import_parser = subcommands.add_parser(
         "import",
         parents=[common],

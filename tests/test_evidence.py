@@ -2,7 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from teladoc_bot.evidence import render_evidence
+from teladoc_bot.evidence import render_evidence, resolve_screen_directory
+from teladoc_bot.prompting import PromptError
 
 
 class EvidenceTests(unittest.TestCase):
@@ -63,6 +64,46 @@ class EvidenceTests(unittest.TestCase):
         self.assertNotIn("<p>lista</p>", text)
         self.assertNotIn("<p>extra</p>", text)
         self.assertIn("Nenhum componente, comportamento ou regra foi inferido.", text)
+
+    def test_screen_dir_quotes_that_directory_and_the_route_that_references_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(
+                root,
+                {
+                    "src/app/pages/clientes/clientes.component.ts": "@Component({ selector: 'app-clientes' })\n",
+                    "src/app/pages/clientes/clientes.component.html": "<form></form>\n",
+                    "src/app/pages/clientes-extra/clientes-extra.component.html": "<p>extra</p>\n",
+                    "src/app/app.routing.ts": "loadChildren: () =>\nimport('src/app/pages/clientes/clientes.module')\n",
+                    "src/app/app.routing-telas.ts": "loadChildren: () =>\nimport('src/app/pages/clientes/clientes.module')\n",
+                },
+            )
+            screen_dir = resolve_screen_directory(root, "src/app/pages/clientes")
+            text = render_evidence(root, "Clientes", screen_dir=screen_dir)
+        self.assertEqual(screen_dir, "src/app/pages/clientes")
+        self.assertIn("Diretório informado: `src/app/pages/clientes`", text)
+        self.assertIn("selector: 'app-clientes'", text)
+        self.assertIn("<form></form>", text)
+        self.assertIn("src/app/app.routing.ts", text)
+        self.assertIn("src/app/app.routing-telas.ts", text)
+        self.assertIn("loadChildren: () =>", text)
+        self.assertIn("src/app/pages/clientes/clientes.module", text)
+        self.assertNotIn("<p>extra</p>", text)
+        self.assertNotIn("Há mais de um diretório", text)
+
+    def test_screen_dir_must_stay_inside_the_clone(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "src").mkdir()
+            with self.assertRaises(PromptError):
+                resolve_screen_directory(root, "../")
+            with self.assertRaises(PromptError):
+                resolve_screen_directory(root, "/tmp")
+            with self.assertRaises(PromptError):
+                resolve_screen_directory(root, "src/ausente")
+            (root / "src" / "arquivo.ts").write_text("export const v = 1;\n", encoding="utf-8")
+            with self.assertRaises(PromptError):
+                resolve_screen_directory(root, "src/arquivo.ts")
 
     def _write(self, root: Path, files: dict[str, str]) -> None:
         for relative, content in files.items():

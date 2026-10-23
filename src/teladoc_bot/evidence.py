@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from teladoc_bot.prompting import PromptError
 from teladoc_bot.textutil import normalize, slugify
 
 _STOP = {
@@ -79,8 +80,37 @@ def index_sources(root: Path) -> tuple[SourceFile, ...]:
     return tuple(found)
 
 
-def render_evidence(root: Path, screen_name: str, sources: tuple[SourceFile, ...] | None = None) -> str:
+def resolve_screen_directory(root: Path, relative: str) -> str:
+    """Confere um diretório de tela relativo e devolve o caminho dentro do clone."""
+    text = relative.strip().replace("\\", "/")
+    if not text or text == ".":
+        raise PromptError("Informe o diretório da tela relativo ao clone do RetaguardaWeb.")
+    raw = Path(text)
+    if raw.is_absolute():
+        raise PromptError("O diretório da tela precisa ser relativo ao clone do RetaguardaWeb.")
+    root_resolved = root.resolve()
+    target = (root_resolved / raw).resolve()
+    if not target.is_relative_to(root_resolved):
+        raise PromptError("O diretório da tela está fora do clone do RetaguardaWeb.")
+    if target == root_resolved:
+        raise PromptError("Informe o diretório da tela, não a raiz do clone.")
+    relative_dir = target.relative_to(root_resolved).as_posix()
+    if not target.exists():
+        raise PromptError(f"O diretório da tela não existe no clone: {relative_dir}")
+    if not target.is_dir():
+        raise PromptError(f"O caminho informado não é um diretório: {relative_dir}")
+    return relative_dir
+
+
+def render_evidence(
+    root: Path,
+    screen_name: str,
+    sources: tuple[SourceFile, ...] | None = None,
+    screen_dir: str | None = None,
+) -> str:
     indexed = index_sources(root) if sources is None else sources
+    if screen_dir is not None:
+        return _render_directed(root, screen_dir, indexed)
     tokens = _tokens(screen_name)
     lines = ["## Evidências locais do RetaguardaWeb", ""]
     if not tokens:
@@ -124,6 +154,82 @@ def render_evidence(root: Path, screen_name: str, sources: tuple[SourceFile, ...
                 lines.append("    [sem trecho classificado; o conteúdo não foi reproduzido]")
             lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _render_directed(root: Path, screen_dir: str, sources: tuple[SourceFile, ...]) -> str:
+    prefix = screen_dir.rstrip("/")
+    selected = [source for source in sources if source.relative == prefix or source.relative.startswith(prefix + "/")]
+    selected.sort(key=lambda source: source.relative)
+    selected.extend(_routes_referencing(root, prefix, sources))
+    lines = [
+        "## Evidências locais do RetaguardaWeb",
+        "",
+        f"Diretório informado: `{prefix}`",
+        "Os trechos abaixo são citações literais dos arquivos desse diretório e das rotas que o referenciam.",
+        "O que não aparece aqui não foi confirmado e não deve ser tratado como regra da tela.",
+        "",
+    ]
+    if not selected:
+        lines.append("Nenhum arquivo de rota, componente, template, formulário ou serviço foi encontrado nesse diretório.")
+        lines.append("")
+    else:
+        for source in selected:
+            lines.append(f"- `{source.relative}`")
+        lines.append("")
+    for kind in _KINDS:
+        group = [source for source in selected if source.kind == kind]
+        lines.append(f"### {_TITLES[kind]}")
+        lines.append("")
+        if not group:
+            lines.append("Não encontrado no clone para esta tela.")
+            lines.append("")
+            continue
+        for source in group:
+            if source_is_outside(source.relative, prefix):
+                excerpt = _route_reference_excerpt(root, source.relative, prefix)
+            else:
+                excerpt = _excerpt(root, source.relative, kind, "")
+            lines.append(f"`{source.relative}`")
+            lines.append("")
+            if excerpt:
+                lines.extend(f"    {line}" for line in excerpt)
+            else:
+                lines.append("    [sem trecho classificado; o conteúdo não foi reproduzido]")
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _routes_referencing(root: Path, directory: str, sources: tuple[SourceFile, ...]) -> list[SourceFile]:
+    extra: list[SourceFile] = []
+    for source in sources:
+        if source.kind != "rota" or source.relative.startswith(directory + "/"):
+            continue
+        if directory in _read(root / source.relative):
+            extra.append(source)
+    extra.sort(key=lambda source: source.relative)
+    return extra
+
+
+def _route_reference_excerpt(root: Path, relative: str, needle: str) -> list[str]:
+    path = root / relative
+    try:
+        if path.stat().st_size > 1_500_000:
+            return ["[arquivo grande demais; trecho não reproduzido]"]
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ["[arquivo não pôde ser lido]"]
+    rows = content.splitlines()
+    chosen: list[str] = []
+    for number, line in enumerate(rows, start=1):
+        if needle not in line:
+            continue
+        previous = rows[number - 2] if number > 1 else ""
+        if previous and needle not in previous and _LINE["rota"].search(previous):
+            chosen.append(f"{number - 1}: {previous.strip()[:200]}")
+        chosen.append(f"{number}: {line.strip()[:200]}")
+        if len(chosen) >= 30:
+            break
+    return chosen
 
 
 def _anchors(sources: tuple[SourceFile, ...], tokens: list[str]) -> dict[str, list[SourceFile]]:
@@ -267,7 +373,13 @@ def _kind(relative: str) -> str | None:
         return "template"
     if not name.endswith(".ts"):
         return None
-    if ".routing." in name or name.endswith(".routing.ts") or name.endswith(".routes.ts") or "/menu/" in name:
+    filename = Path(name).name
+    if (
+        ".routing" in filename
+        or "-routing" in filename
+        or name.endswith(".routes.ts")
+        or "/menu/" in name
+    ):
         return "rota"
     if name.endswith(".component.ts"):
         return "componente"

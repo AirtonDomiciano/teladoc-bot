@@ -30,12 +30,13 @@ O PAT fica fora do JSON. O bot lê `AZURE_DEVOPS_PAT` ou `AZURE_PAT`. Um arquivo
 .venv/bin/python -m teladoc_bot check --config config.json
 .venv/bin/python -m teladoc_bot collect --config config.json
 .venv/bin/python -m teladoc_bot collect --config config.json --only-id 30092
+.venv/bin/python -m teladoc_bot collect --config config.json --only-id 30057 --screen-dir src/app/pages/cadastros/clientes/placas/gerenciamento/placas
 .venv/bin/python -m teladoc_bot import --config config.json --package output/<execução>/pacote --from respostas/
 .venv/bin/python -m teladoc_bot review --config config.json --package output/<execução>/pacote
 .venv/bin/python -m teladoc_bot publish --config config.json --package output/<execução>/pacote
 ```
 
-`collect` lê as linhas elegíveis, a US e o clone local, e grava o pacote em `output/<execução>/pacote`. `--limit` limita a quantidade exportada. `--only-id` exporta uma US. O pacote traz a identificação, o caminho do clone, as observações, as referências Figma do prompt e as evidências encontradas no RetaguardaWeb: caminhos e trechos literais de rotas, componentes, templates, formulários e serviços. Se a tela não for localizada com segurança, o pacote registra essa limitação e não inventa comportamento. Credenciais não entram nos arquivos.
+`collect` lê as linhas elegíveis, a US e o clone local, e grava o pacote em `output/<execução>/pacote`. `--limit` limita a quantidade exportada. `--only-id` exporta uma US. `--screen-dir` indica o diretório da tela, relativo ao clone: o caminho precisa existir dentro do RetaguardaWeb, e as evidências saem desse diretório e das rotas que o referenciam. Sem essa opção, a coleta continua buscando pelo nome e não inclui trechos quando há mais de um diretório compatível. O diretório informado vale para uma única US. O pacote traz a identificação, o caminho do clone, as observações, as referências Figma do prompt e as evidências encontradas no RetaguardaWeb: caminhos e trechos literais de rotas, componentes, templates, formulários e serviços. Se a tela não for localizada com segurança, o pacote registra essa limitação e não inventa comportamento. Credenciais não entram nos arquivos.
 
 `import` lê o diretório indicado por `--from`. Cada resposta é um JSON, ou um Markdown com um objeto JSON, e precisa trazer `work_item_id` e o `screen_name` da tela. A validação existente confere o schema prático, os caminhos reais, as keys e os seletores. Conteúdo ausente, inválido ou associado a outro ID fica bloqueado e não segue para publicação.
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from teladoc_bot.azure import AzureDevOpsClient, AzureError
 from teladoc_bot.config import Config
-from teladoc_bot.evidence import index_sources, render_evidence
+from teladoc_bot.evidence import index_sources, render_evidence, resolve_screen_directory
 from teladoc_bot.prompting import PromptError, build_prompt, read_base_prompt
 from teladoc_bot.runner import _allocate_run_dir, _publish, _write_json
 from teladoc_bot.spreadsheet import SheetRow, load_rows
@@ -36,6 +36,7 @@ class ScreenRecord:
     organization: str
     project: str
     source: str
+    screen_directory: str = ""
 
     @property
     def key(self) -> tuple[str, str, int]:
@@ -58,12 +59,18 @@ def collect_screens(
     *,
     limit: int | None,
     only_id: int | None,
+    screen_dir: str | None = None,
     log=print,
 ) -> tuple[Path, int]:
     """Exporta o pacote Markdown das telas elegíveis. Não chama IA nem publica."""
     _require_clone(config)
+    resolved_dir = resolve_screen_directory(config.retaguarda_path, screen_dir) if screen_dir else ""
     base_prompt, prompt_version = read_base_prompt(config.prompt_path)
     rows = load_rows(config.spreadsheet_path, config.sheet, config.header_row, config.columns)
+    if resolved_dir and only_id is None and limit != 1:
+        targeted = [row for row in rows if row.skip_reason is None]
+        if len(targeted) != 1:
+            raise PromptError("O diretório da tela vale para uma única US. Informe --only-id ou --limit 1.")
     sources = index_sources(config.retaguarda_path)
     run_dir = _allocate_run_dir(config.output_dir)
     package = run_dir / "pacote"
@@ -97,7 +104,12 @@ def collect_screens(
             build_prompt(base_prompt, prompt_version, row, work_item, comments, config.retaguarda_path),
             row.work_item.id,
         )
-        document = document.rstrip() + "\n\n" + render_evidence(config.retaguarda_path, row.screen_name, sources)
+        document = document.rstrip() + "\n\n" + render_evidence(
+            config.retaguarda_path,
+            row.screen_name,
+            sources,
+            screen_dir=resolved_dir or None,
+        )
         _write_text(package / filename, document)
         screens.append(
             ScreenRecord(
@@ -107,6 +119,7 @@ def collect_screens(
                 row.work_item.organization,
                 row.work_item.project,
                 filename,
+                resolved_dir,
             )
         )
         exported += 1
@@ -123,6 +136,7 @@ def collect_screens(
                     "organization": screen.organization,
                     "project": screen.project,
                     "source": screen.source,
+                    **({"screen_directory": screen.screen_directory} if screen.screen_directory else {}),
                 }
                 for screen in screens
             ],

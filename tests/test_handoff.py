@@ -12,6 +12,7 @@ from support import LINK, ready_payload, seed_clone, write_config, write_workboo
 from teladoc_bot.azure import Comment, Relation, WorkItem
 from teladoc_bot.cli import main
 from teladoc_bot.handoff import collect_screens, import_screens, publish_screens, review_screens
+from teladoc_bot.prompting import PromptError
 from teladoc_bot.htmlutil import acceptance_criteria_html, markdown_to_html
 from teladoc_bot.validation import validate_analysis
 
@@ -94,6 +95,50 @@ class HandoffTests(unittest.TestCase):
         self.assertNotIn(SECRET, text)
         self.assertNotIn(SECRET, (package / "pacote.json").read_text(encoding="utf-8"))
         self.assertNotIn(SECRET, (package / "indice.md").read_text(encoding="utf-8"))
+
+    def test_screen_dir_collects_only_that_directory(self) -> None:
+        screen = self.clone / "src/app/pages/clientes"
+        screen.mkdir(parents=True)
+        (screen / "clientes.component.ts").write_text("@Component({ selector: 'app-clientes' })\n", encoding="utf-8")
+        (screen / "clientes.component.html").write_text("<form></form>\n", encoding="utf-8")
+        package, code = collect_screens(
+            self.config,
+            self.azure,
+            limit=None,
+            only_id=10,
+            screen_dir="src/app/pages/clientes",
+            log=lambda _m: None,
+        )
+        text = (package / "us-10.md").read_text(encoding="utf-8")
+        payload = json.loads((package / "pacote.json").read_text(encoding="utf-8"))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.azure.updates, [])
+        self.assertEqual(self._cell("G2"), "Não")
+        self.assertIn("Diretório informado: `src/app/pages/clientes`", text)
+        self.assertIn("selector: 'app-clientes'", text)
+        self.assertNotIn("nomeCliente", text)
+        self.assertEqual(payload["screens"][0]["screen_directory"], "src/app/pages/clientes")
+        self.assertNotIn(SECRET, text)
+
+    def test_screen_dir_rejects_a_directory_for_several_screens(self) -> None:
+        write_workbook(
+            self.sheet,
+            [
+                ["Clientes", "Não", "CRUD", LINK.format(id=10), ""],
+                ["Placas", "Não", "CRUD", LINK.format(id=11), ""],
+            ],
+        )
+        with self.assertRaises(PromptError):
+            collect_screens(
+                self.config,
+                self.azure,
+                limit=None,
+                only_id=None,
+                screen_dir="src/app",
+                log=lambda _m: None,
+            )
+        self.assertEqual(self.azure.updates, [])
+        self.assertEqual(self._cell("G2"), "Não")
 
     def test_invalid_missing_and_wrong_id_block_publication(self) -> None:
         package, _code = collect_screens(self.config, self.azure, limit=None, only_id=None, log=lambda _m: None)
