@@ -40,6 +40,10 @@ class SheetRow:
 
 def load_rows(path: Path, sheet_name: str | None, header_row: int, columns: ColumnMap) -> list[SheetRow]:
     del columns
+    if _use_google_sheets():
+        from teladoc_bot.gsheets import load_google_rows
+
+        return load_google_rows(sheet_name, header_row)
     if not path.is_file():
         raise ConfigError(f"Planilha não encontrada: {path}")
     workbook = load_workbook(path, data_only=True, keep_vba=path.suffix.lower() == ".xlsm")
@@ -65,6 +69,11 @@ def mark_documented(
     expected: WorkItemRef,
 ) -> None:
     del columns, header_row
+    if _use_google_sheets():
+        from teladoc_bot.gsheets import mark_google_documented
+
+        mark_google_documented(sheet_name, excel_row, expected)
+        return
     workbook = load_workbook(path, data_only=False, keep_vba=path.suffix.lower() == ".xlsm")
     try:
         worksheet = _resolve_sheet(workbook, sheet_name)
@@ -80,6 +89,12 @@ def mark_documented(
     finally:
         workbook.close()
     temporary.replace(path)
+
+
+def _use_google_sheets() -> bool:
+    from teladoc_bot.gsheets import google_requested
+
+    return google_requested()
 
 
 def _resolve_sheet(workbook, sheet_name: str | None) -> Worksheet:

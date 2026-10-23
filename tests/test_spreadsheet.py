@@ -24,6 +24,15 @@ LINK = "https://dev.azure.com/metanetsistema/Metanet/_workitems/edit/{id}"
 
 
 class SpreadsheetTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._google_id = os.environ.pop("GOOGLE_SPREADSHEET_ID", None)
+
+    def tearDown(self) -> None:
+        if self._google_id is None:
+            os.environ.pop("GOOGLE_SPREADSHEET_ID", None)
+        else:
+            os.environ["GOOGLE_SPREADSHEET_ID"] = self._google_id
+
     def test_selection_uses_fixed_columns_and_ignores_andamento(self) -> None:
         previous = {key: os.environ.get(key) for key in ("AZURE_ORGANIZATION", "AZURE_PROJECT")}
         os.environ.pop("AZURE_ORGANIZATION", None)

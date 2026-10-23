@@ -6,4 +6,6 @@ __pycache__/
 output/
 config.json
 .env
+credentials.json
+token.json
 *.xlsx.tmp
