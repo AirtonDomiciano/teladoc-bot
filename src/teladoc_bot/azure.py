@@ -126,19 +126,10 @@ class AzureDevOpsClient:
         self._transport = transport or UrllibTransport(timeout_seconds)
 
     def get_work_item(self, ref: WorkItemRef) -> WorkItem:
-        fields = [
-            "System.Id",
-            "System.Title",
-            "System.WorkItemType",
-            "System.State",
-            self.description_field,
-            self.acceptance_field,
-        ]
         query = urlencode(
             {
                 "api-version": self.api_version,
                 "$expand": "relations",
-                "fields": ",".join(dict.fromkeys(fields)),
             }
         )
         payload = self._get_json(f"{self._work_item_url(ref)}?{query}")

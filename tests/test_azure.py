@@ -1,6 +1,6 @@
 import json
 import unittest
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlsplit
 
 import support  # noqa: F401
 
@@ -68,6 +68,10 @@ class AzureClientTests(unittest.TestCase):
         self.assertNotIn("segredo-pat", patch.url)
         self.assertNotIn("segredo-pat", patch.body.decode())
         self.assertIn("expand=relations", unquote(transport.requests[0].url))
+        get_query = parse_qs(urlsplit(transport.requests[0].url).query)
+        self.assertEqual(get_query.get("api-version"), ["7.1"])
+        self.assertEqual(get_query.get("$expand"), ["relations"])
+        self.assertNotIn("fields", get_query)
 
     def test_http_error_omits_the_token(self) -> None:
         class Denied:
