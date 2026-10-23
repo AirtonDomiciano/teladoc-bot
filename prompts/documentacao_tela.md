@@ -4,7 +4,14 @@ teladoc-prompt-version: 1
 
 Você analisa uma única tela do clone local do RetaguardaWeb e devolve a documentação para a User Story correspondente. Esta sessão é exclusiva desta tela. Não use memória, histórico ou conclusão de outra tela.
 
-A descrição atual da US será substituída por esta documentação quando a publicação estiver habilitada. Por isso, carregue para o texto novo somente referências, links e restrições que estejam confirmados na US, nos comentários, nas relações ou nas observações da planilha.
+A descrição atual da US será substituída por esta documentação quando a publicação estiver habilitada. Carregue para o texto novo as referências gerais abaixo e somente as demais referências, links e restrições que estejam confirmados na US, nos comentários, nas relações ou nas observações da planilha.
+
+## Referências gerais
+
+Estas referências valem para todas as telas. Inclua-as nas seções indicadas mesmo quando não aparecerem na US, nos comentários, nas relações ou nas observações.
+
+- Seção 4, Figma DS: https://www.figma.com/design/aIE4czmTg58S6BvpKi3Ue1/DS---Extension?node-id=6472-19276&node-type=canvas
+- Seção 5, padrão de desenho de Produtos: https://www.figma.com/design/Z72rFe7HWnNuCmmppWfiKN/Cadastro-de-produtos?node-id=213-10103
 
 ## Leitura obrigatória
 
@@ -55,7 +62,7 @@ Não invente campos, caminhos, propriedades, registros Formly ou contratos.
 - Se faltar confirmação de arquivo, key, validação, payload, filtro ou permissão essencial, use `status: pending` e explique a lacuna em `pending_reason`.
 - Se o código mostrar complexidade incompatível com CRUD simples, como wizard, várias entidades, orquestração entre telas ou regra que não cabe em listagem e drawer, use `status: needs_review`, explique em `needs_review_reason` e mantenha a tela fora de uma documentação genérica.
 - As observações da planilha são restrições da tela. Se elas impedirem uma documentação CRUD confiável, respeite a restrição com `pending` ou `needs_review`.
-- Figma, links e referências de levantamento só entram se aparecerem na US, em comentário, relação ou observação. Caso contrário, escreva na seção correspondente: "Não confirmado na US." Isso, sozinho, não impede `ready` quando a implementação foi confirmada no código.
+- Além das duas referências gerais de Figma, outros links e referências de levantamento só entram se aparecerem na US, em comentário, relação ou observação. A ausência de um Figma específico da US não impede `ready` quando a implementação foi confirmada no código.
 
 `pending_reason` fica vazio quando o status é `ready` ou `needs_review`. `needs_review_reason` fica vazio quando o status é `ready` ou `pending`.
 
@@ -79,6 +86,8 @@ Não invente campos, caminhos, propriedades, registros Formly ou contratos.
 ## 14. Critérios de aceite verificáveis
 
 Adapte o conteúdo ao fluxo real. Não troque os títulos.
+
+Na seção 4, escreva o link geral do Figma DS. Na seção 5, escreva o link geral do padrão de desenho de Produtos. Não substitua esses links por "Não confirmado na US."
 
 Na seção 7, liste os caminhos relativos ao clone, com barra `/`. Os mesmos caminhos vão em `files_consulted`, e cada um precisa ser um arquivo que você abriu.
 
