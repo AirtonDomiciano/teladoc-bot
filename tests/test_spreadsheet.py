@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 import unittest
@@ -24,10 +25,20 @@ LINK = "https://dev.azure.com/metanetsistema/Metanet/_workitems/edit/{id}"
 
 class SpreadsheetTests(unittest.TestCase):
     def test_selection_uses_fixed_columns_and_ignores_andamento(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "copia.xlsx"
-            self._write_layout(path)
-            rows = load_rows(path, "TELAS DE CADASTRO", 1, COLUMNS)
+        previous = {key: os.environ.get(key) for key in ("AZURE_ORGANIZATION", "AZURE_PROJECT")}
+        os.environ.pop("AZURE_ORGANIZATION", None)
+        os.environ.pop("AZURE_PROJECT", None)
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "copia.xlsx"
+                self._write_layout(path)
+                rows = load_rows(path, "TELAS DE CADASTRO", 1, COLUMNS)
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
         by_name = {row.screen_name: row for row in rows}
         placas = by_name["Placas"]
         self.assertIsNone(placas.skip_reason)
@@ -87,6 +98,64 @@ class SpreadsheetTests(unittest.TestCase):
             self.assertEqual(worksheet["G3"].value, "NÃO")
             self.assertEqual(worksheet["H3"].value, LINK.format(id=30055))
             workbook.close()
+
+    def test_reload_after_mark_keeps_other_rows_eligible_by_id(self) -> None:
+        previous = {key: os.environ.get(key) for key in ("AZURE_ORGANIZATION", "AZURE_PROJECT")}
+        os.environ["AZURE_ORGANIZATION"] = "https://dev.azure.com/metanetsistema"
+        os.environ["AZURE_PROJECT"] = "Metanet"
+        try:
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "copia.xlsx"
+                formula = '=IF(D{row}<>"",CONCATENATE("https://dev.azure.com/metanetsistema/Metanet/_workitems/edit/",D{row}),"")'
+                workbook = Workbook()
+                worksheet = workbook.active
+                worksheet.title = "TELAS DE CADASTRO"
+                rows = [
+                    (2, "Categorias", 30092, "NÃO"),
+                    (3, "Placas", 30057, "NÃO"),
+                    (4, "Horários", 30093, "NÃO"),
+                ]
+                for row, name, us_id, documentation in rows:
+                    worksheet.cell(row, 1).value = name
+                    worksheet.cell(row, 4).value = us_id
+                    worksheet.cell(row, 6).value = "CRUD"
+                    worksheet.cell(row, 7).value = documentation
+                    worksheet.cell(row, 8).value = formula.format(row=row)
+                workbook.save(path)
+                workbook.close()
+
+                before = {row.screen_name: row for row in load_rows(path, "TELAS DE CADASTRO", 1, COLUMNS)}
+                self.assertIsNone(before["Categorias"].skip_reason)
+                self.assertIsNone(before["Placas"].skip_reason)
+                self.assertEqual(before["Placas"].work_item.id if before["Placas"].work_item else None, 30057)
+
+                ref = parse_work_item_link(LINK.format(id=30092))
+                assert ref is not None
+                mark_documented(path, "TELAS DE CADASTRO", 1, COLUMNS, 2, ref)
+
+                stored = load_workbook(path, data_only=False)
+                sheet = stored["TELAS DE CADASTRO"]
+                self.assertEqual(sheet["G2"].value, "SIM")
+                self.assertEqual(sheet["H2"].value, formula.format(row=2))
+                self.assertEqual(sheet["H3"].value, formula.format(row=3))
+                self.assertEqual(sheet["H4"].value, formula.format(row=4))
+                stored.close()
+                cached = load_workbook(path, data_only=True)
+                self.assertIsNone(cached["TELAS DE CADASTRO"]["H3"].value)
+                cached.close()
+
+                after = {row.screen_name: row for row in load_rows(path, "TELAS DE CADASTRO", 1, COLUMNS)}
+                self.assertEqual(after["Categorias"].skip_reason, 'documentação diferente de "NÃO"')
+                self.assertIsNone(after["Placas"].skip_reason)
+                self.assertIsNone(after["Horários"].skip_reason)
+                self.assertEqual(after["Placas"].azure_link, LINK.format(id=30057))
+                self.assertEqual(after["Horários"].work_item.id if after["Horários"].work_item else None, 30093)
+        finally:
+            for key, value in previous.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
 
     def test_real_workbook_copy_keeps_formulas_after_mark(self) -> None:
         source = Path(__file__).resolve().parents[1] / "Componentização - telas de cadastro.xlsx"

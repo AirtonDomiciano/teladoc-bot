@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,6 +104,8 @@ def _read_row(worksheet: Worksheet, excel_row: int) -> SheetRow | None:
     notes = _text(worksheet.cell(excel_row, _NOTES).value)
     if not any((screen_name, sheet_id, status, documentation, azure_link, notes)):
         return None
+    if not azure_link and sheet_id is not None:
+        azure_link = _link_from_sheet_id(sheet_id)
     work_item = parse_work_item_link(azure_link)
     return SheetRow(
         excel_row=excel_row,
@@ -140,6 +143,14 @@ def _skip_reason(
     if not screen_name.strip():
         return "nome da tela vazio"
     return None
+
+
+def _link_from_sheet_id(sheet_id: int) -> str:
+    organization = os.environ.get("AZURE_ORGANIZATION", "").strip().rstrip("/")
+    project = os.environ.get("AZURE_PROJECT", "").strip().strip("/")
+    if not organization or not project:
+        return _EMPTY
+    return f"{organization}/{project}/_workitems/edit/{sheet_id}"
 
 
 def _sheet_id(value: object) -> int | None:
