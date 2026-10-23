@@ -371,13 +371,17 @@ def _write_json(path: Path, payload: object) -> None:
 def require_pat(config: Config) -> str:
     import os
 
-    pat = os.environ.get(config.pat_env, "")
-    if not pat.strip():
-        raise PromptError(
-            f"Defina a variável de ambiente {config.pat_env} com um PAT do Azure DevOps. "
-            "Nenhuma análise foi executada."
-        )
-    return pat.strip()
+    names: list[str] = []
+    for name in (config.pat_env, "AZURE_DEVOPS_PAT", "AZURE_PAT"):
+        if name not in names:
+            names.append(name)
+    for name in names:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+    raise PromptError(
+        "Defina " + " ou ".join(names) + " com um PAT do Azure DevOps. Nenhuma análise foi executada."
+    )
 
 
 def azure_from_config(config: Config) -> AzureDevOpsClient:

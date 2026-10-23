@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import os
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 
@@ -135,3 +136,33 @@ def _resolve(base: Path, value: str) -> Path:
     if not path.is_absolute():
         path = base / path
     return path.resolve()
+
+
+def load_dotenv(path: Path) -> None:
+    """Carrega um .env sem substituir variáveis que já existem no processo."""
+    if not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+def apply_environment(config: Config) -> Config:
+    """Planilha, aba e clone podem vir do ambiente e prevalecem sobre o JSON."""
+    updates: dict = {}
+    spreadsheet = os.environ.get("PLANILHA_PATH", "").strip()
+    sheet = os.environ.get("PLANILHA_ABA", "").strip()
+    retaguarda = os.environ.get("RETAGUARDA_PATH", "").strip()
+    if spreadsheet:
+        updates["spreadsheet_path"] = Path(spreadsheet).expanduser().resolve()
+    if sheet:
+        updates["sheet"] = sheet
+    if retaguarda:
+        updates["retaguarda_path"] = Path(retaguarda).expanduser().resolve()
+    return replace(config, **updates) if updates else config

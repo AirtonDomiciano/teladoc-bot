@@ -1,0 +1,35 @@
+{
+  "spreadsheet": {
+    "path": "planilha.xlsx",
+    "sheet": null,
+    "header_row": 1,
+    "columns": {
+      "screen_name": "Nome da tela",
+      "documentation": "Documentação",
+      "status": "Status",
+      "azure_link": "Link Azure",
+      "notes": "Observações"
+    }
+  },
+  "retaguarda_path": "/caminho/para/RetaguardaWeb",
+  "prompt_path": "prompts/documentacao_tela.md",
+  "schema_path": "schema/resposta_analise.json",
+  "output_dir": "output",
+  "publish": false,
+  "azure": {
+    "pat_env": "AZURE_DEVOPS_PAT",
+    "api_version": "7.1",
+    "comments_api_version": "7.1-preview.4",
+    "description_field": "System.Description",
+    "acceptance_criteria_field": "Microsoft.VSTS.Common.AcceptanceCriteria",
+    "timeout_seconds": 60
+  },
+  "agent": {
+    "executor": "codex",
+    "codex_bin": null,
+    "model": null,
+    "timeout_seconds": 1800,
+    "ignore_user_config": false,
+    "disable_features": ["memories", "multi_agent", "browser_use", "computer_use"]
+  }
+}

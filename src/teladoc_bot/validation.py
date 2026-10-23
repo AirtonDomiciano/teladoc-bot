@@ -235,33 +235,34 @@ def _key_reasons(documentation: str, corpus: str) -> list[str]:
         return ["A documentação não tem uma tabela com a coluna Key."]
     if not keys:
         return ["Nenhuma key real foi informada na tabela de campos."]
-    corpus_folded = corpus.casefold()
-    return [f"Key não encontrada nos arquivos consultados: {key}" for key in keys if key.casefold() not in corpus_folded]
+    return [f"Key não encontrada nos arquivos consultados: {key}" for key in keys if not _token_in_corpus(key, corpus)]
 
 
 def _unique_id_reasons(documentation: str, corpus: str) -> list[str]:
-    corpus_folded = corpus.casefold()
     reasons = []
     pattern = re.compile(r"uniqueIdField\s*[:=]\s*`?([A-Za-z_][A-Za-z0-9_.]*)`?")
     for match in pattern.finditer(documentation):
         token = match.group(1)
-        if token.casefold() not in corpus_folded:
+        if not _token_in_corpus(token, corpus):
             reasons.append(f"uniqueIdField não encontrado nos arquivos consultados: {token}")
     return reasons
 
 
 def _selector_reasons(documentation: str, corpus: str) -> list[str]:
-    corpus_folded = corpus.casefold()
     missing = []
     seen = set()
     for selector in _APP_SELECTOR.findall(documentation):
-        folded = selector.casefold()
-        if folded in seen:
+        if selector in seen:
             continue
-        seen.add(folded)
-        if folded not in corpus_folded:
+        seen.add(selector)
+        if not _token_in_corpus(selector, corpus):
             missing.append(f"Seletor não encontrado nos arquivos consultados: {selector}")
     return missing
+
+
+def _token_in_corpus(token: str, corpus: str) -> bool:
+    pattern = re.compile(rf"(?<![A-Za-z0-9_-]){re.escape(token)}(?![A-Za-z0-9_-])")
+    return pattern.search(corpus) is not None
 
 
 def _clean_cell(value: str) -> str:

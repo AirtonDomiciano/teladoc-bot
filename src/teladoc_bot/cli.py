@@ -9,7 +9,7 @@ from pathlib import Path
 
 from teladoc_bot.azure import AzureError
 from teladoc_bot.codex import CodexUnavailable, create_executor
-from teladoc_bot.config import Config, ConfigError
+from teladoc_bot.config import Config, ConfigError, apply_environment, load_dotenv
 from teladoc_bot.prompting import PromptError, read_base_prompt
 from teladoc_bot.runner import _require_schema, azure_from_config, execute, require_pat
 from teladoc_bot.spreadsheet import load_rows
@@ -19,7 +19,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
-        config = apply_overrides(Config.load(Path(args.config)), args)
+        config_path = Path(args.config)
+        load_dotenv(config_path.expanduser().resolve().parent / ".env")
+        config = apply_overrides(apply_environment(Config.load(config_path)), args)
         if args.command == "check":
             return check(config)
         publish = config.publish
@@ -62,7 +64,7 @@ def check(config: Config) -> int:
         print(f"RetaguardaWeb: {config.retaguarda_path}")
     try:
         require_pat(config)
-        print(f"PAT: variável {config.pat_env} definida.")
+        print("PAT disponível.")
     except PromptError as exc:
         problems.append(str(exc))
     try:

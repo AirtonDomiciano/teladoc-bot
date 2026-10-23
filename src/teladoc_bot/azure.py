@@ -142,6 +142,8 @@ class AzureDevOpsClient:
             }
         )
         payload = self._get_json(f"{self._work_item_url(ref)}?{query}")
+        if "fields" not in payload:
+            raise AzureError("A resposta da US não trouxe os campos do work item.")
         values = payload.get("fields") or {}
         relations = []
         for item in payload.get("relations") or []:
@@ -168,8 +170,10 @@ class AzureDevOpsClient:
         comments: list[Comment] = []
         query = urlencode({"api-version": self.comments_api_version})
         url = f"{self._work_item_url(ref)}/comments?{query}"
-        for _ in range(20):
+        for _page in range(20):
             payload = self._get_json(url)
+            if "comments" not in payload:
+                raise AzureError("A resposta de comentários da US não trouxe a lista comments.")
             for item in payload.get("comments") or []:
                 author = item.get("createdBy") or {}
                 text = item.get("text") or item.get("renderedText") or ""
@@ -190,6 +194,8 @@ class AzureDevOpsClient:
                 }
             )
             url = f"{self._work_item_url(ref)}/comments?{query}"
+        else:
+            comments.append(Comment("", "", "[a paginação de comentários foi interrompida nesta consulta]"))
         return comments
 
     def update_documentation(self, ref: WorkItemRef, description_html: str, acceptance_html: str) -> None:

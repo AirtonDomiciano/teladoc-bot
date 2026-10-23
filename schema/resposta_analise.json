@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "screen_name",
+    "documentation_markdown",
+    "acceptance_criteria",
+    "files_consulted",
+    "pending_reason",
+    "needs_review_reason",
+    "evidence_notes"
+  ],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ready", "pending", "needs_review"],
+      "description": "ready publica; pending registra lacuna; needs_review registra complexidade acima de CRUD simples."
+    },
+    "screen_name": {
+      "type": "string",
+      "description": "Nome da tela confirmado no código ou na US."
+    },
+    "documentation_markdown": {
+      "type": "string",
+      "description": "Documentação em Markdown com as 14 seções obrigatórias quando o status for ready."
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Critérios verificáveis, repetidos na seção 14."
+    },
+    "files_consulted": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Caminhos relativos dos arquivos realmente abertos no clone."
+    },
+    "pending_reason": {
+      "type": "string",
+      "description": "Motivo da pendência. String vazia quando o status não for pending."
+    },
+    "needs_review_reason": {
+      "type": "string",
+      "description": "Motivo da revisão humana. String vazia quando o status não for needs_review."
+    },
+    "evidence_notes": {
+      "type": "string",
+      "description": "O que foi confirmado no código e o que ficou sem confirmação."
+    }
+  }
+}

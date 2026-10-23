@@ -12,7 +12,14 @@ from pathlib import Path
 
 from teladoc_bot.config import Config
 
-_SECRET_ENV = {"AZURE_DEVOPS_PAT", "AZURE_DEVOPS_EXT_PAT", "ADO_PAT", "AZURE_DEVOPS_TOKEN"}
+_SECRET_ENV = {
+    "AZURE_DEVOPS_PAT",
+    "AZURE_DEVOPS_EXT_PAT",
+    "AZURE_DEVOPS_TOKEN",
+    "AZURE_PAT",
+    "ADO_PAT",
+}
+_SECRET_SUFFIXES = ("_PAT", "_TOKEN", "_SECRET", "_PASSWORD")
 _DIRECT_CANDIDATES = (
     Path(".local/bin/codex"),
     Path(".npm-global/bin/codex"),
@@ -221,7 +228,12 @@ def _discover(home: Path) -> Path | None:
 def _scrub_env(extra_names: tuple[str, ...]) -> dict[str, str]:
     blocked = {name.upper() for name in extra_names}
     blocked.update(_SECRET_ENV)
-    return {key: value for key, value in os.environ.items() if key.upper() not in blocked}
+
+    def secret(key: str) -> bool:
+        upper = key.upper()
+        return upper in blocked or upper.endswith(_SECRET_SUFFIXES)
+
+    return {key: value for key, value in os.environ.items() if not secret(key)}
 
 
 def _run_process(
