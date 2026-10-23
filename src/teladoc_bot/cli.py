@@ -10,6 +10,7 @@ from pathlib import Path
 from teladoc_bot.azure import AzureError
 from teladoc_bot.codex import CodexUnavailable, create_executor
 from teladoc_bot.config import Config, ConfigError, apply_environment, load_dotenv
+from teladoc_bot.handoff import collect_screens, import_screens, publish_screens, review_screens
 from teladoc_bot.prompting import PromptError, read_base_prompt
 from teladoc_bot.runner import _require_schema, azure_from_config, execute, require_pat
 from teladoc_bot.spreadsheet import load_rows
@@ -24,10 +25,22 @@ def main(argv: list[str] | None = None) -> int:
         config = apply_overrides(apply_environment(Config.load(config_path)), args)
         if args.command == "check":
             return check(config)
+        if args.command == "collect":
+            _package, code = collect_screens(
+                config,
+                azure_from_config(config),
+                limit=_limit(args),
+                only_id=getattr(args, "only_id", None),
+            )
+            return code
+        if args.command == "import":
+            return import_screens(config, _path_arg(args.package), _path_arg(args.source))
+        if args.command == "review":
+            return review_screens(config, _path_arg(args.package))
+        if args.command == "publish":
+            return publish_screens(config, _path_arg(args.package), azure_from_config(config))
         publish = config.publish
-        limit = args.limit
-        if limit is not None and limit <= 0:
-            raise ConfigError("--limit precisa ser um inteiro positivo.")
+        limit = _limit(args)
         executor = create_executor(config)
         azure = azure_from_config(config)
         report = execute(
@@ -110,6 +123,17 @@ def apply_overrides(config: Config, args: argparse.Namespace) -> Config:
     return replace(config, **updates) if updates else config
 
 
+def _limit(args: argparse.Namespace) -> int | None:
+    limit = getattr(args, "limit", None)
+    if limit is not None and limit <= 0:
+        raise ConfigError("--limit precisa ser um inteiro positivo.")
+    return limit
+
+
+def _path_arg(value: str) -> Path:
+    return Path(value).expanduser().resolve()
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="teladoc-bot",
@@ -133,4 +157,41 @@ def _parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--no-publish", action="store_true", help="Mantém a publicação desligada nesta execução.")
     run_parser.add_argument("--limit", type=int, help="Quantidade máxima de telas analisadas nesta execução.")
     run_parser.add_argument("--only-id", type=int, help="Analisa somente a US com este ID.")
+    collect_parser = subcommands.add_parser(
+        "collect",
+        parents=[common],
+        help="Exporta o pacote Markdown das telas elegíveis, sem chamar IA.",
+    )
+    collect_parser.add_argument("--spreadsheet", help="Substitui o caminho da planilha.")
+    collect_parser.add_argument("--sheet", help="Substitui a aba da planilha.")
+    collect_parser.add_argument("--retaguarda", help="Substitui o caminho do clone.")
+    collect_parser.add_argument("--output-dir", help="Substitui o diretório de evidências.")
+    collect_parser.add_argument("--limit", type=int, help="Quantidade máxima de telas exportadas nesta coleta.")
+    collect_parser.add_argument("--only-id", type=int, help="Exporta somente a US com este ID.")
+    import_parser = subcommands.add_parser(
+        "import",
+        parents=[common],
+        help="Importa o conteúdo elaborado e valida cada tela, sem publicar.",
+    )
+    import_parser.add_argument("--package", required=True, help="Diretório do pacote gerado por collect.")
+    import_parser.add_argument("--from", dest="source", required=True, help="Diretório com o JSON, ou Markdown contendo o JSON, de cada US.")
+    import_parser.add_argument("--retaguarda", help="Substitui o caminho do clone.")
+    review_parser = subcommands.add_parser(
+        "review",
+        parents=[common],
+        help="Confere o conteúdo importado, sem publicar e sem alterar a planilha.",
+    )
+    review_parser.add_argument("--package", required=True, help="Diretório do pacote gerado por collect.")
+    review_parser.add_argument("--spreadsheet", help="Substitui o caminho da planilha.")
+    review_parser.add_argument("--sheet", help="Substitui a aba da planilha.")
+    review_parser.add_argument("--retaguarda", help="Substitui o caminho do clone.")
+    publish_parser = subcommands.add_parser(
+        "publish",
+        parents=[common],
+        help="Publica as telas aprovadas e marca SIM somente depois da confirmação.",
+    )
+    publish_parser.add_argument("--package", required=True, help="Diretório do pacote gerado por collect.")
+    publish_parser.add_argument("--spreadsheet", help="Substitui o caminho da planilha.")
+    publish_parser.add_argument("--sheet", help="Substitui a aba da planilha.")
+    publish_parser.add_argument("--retaguarda", help="Substitui o caminho do clone.")
     return parser

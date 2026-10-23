@@ -1,18 +1,17 @@
 # TelaDoc Bot
 
-Bot de terminal que percorre uma planilha de telas, analisa o clone local do RetaguardaWeb e grava a documentação na User Story do Azure DevOps. Cada tela recebe um prompt novo e uma sessão nova do Codex CLI.
+Bot de terminal que separa a coleta, a elaboração e a publicação da documentação das telas CRUD. A coleta exporta um pacote Markdown com a identificação da tela, as fontes e o contexto da US. A elaboração desse pacote acontece fora do bot. A importação valida o conteúdo pronto, a conferência mostra o resultado e a publicação grava na User Story somente o que a validação aprovar.
 
-A publicação fica desligada por padrão. `Documentação` só vira `Sim` depois que a US é atualizada e a releitura confirma o texto enviado.
+A publicação não altera a planilha até o comando `publish`. `Documentação` só vira `Sim` depois que a US é atualizada e a releitura confirma o texto enviado, ou quando a releitura mostra que o conteúdo esperado já está presente.
 
 ## Requisitos
 
 - Python 3.11 ou superior.
-- Planilha `.xlsx`.
-- PAT do Azure DevOps com permissão de ler e editar work items.
-- Clone local do RetaguardaWeb, usado somente para leitura.
-- Codex CLI. O comando conferido nesta versão é o `codex exec` do codex-cli 0.155, com `--sandbox read-only`, `--ephemeral`, `--json`, `--output-schema`, `-o`, `-C` e o prompt em stdin (`-`).
+- Planilha `.xlsx`, ou a planilha do Google Sheets quando `GOOGLE_SPREADSHEET_ID` está definido.
+- PAT do Azure DevOps com permissão de ler e editar work items. Ele fica fora dos arquivos exportados.
+- Clone local do RetaguardaWeb, usado somente para leitura e para validar caminhos, keys e seletores.
 
-O executável pode estar fora do `PATH`. A resolução usa, nesta ordem, `agent.codex_bin`, a variável `CODEX_BIN`, o `PATH` e instalações locais conhecidas do Codex nas extensões do VS Code e do Cursor. Se nenhum executável responder a `codex --version`, o bot para e informa a dependência. Ele não simula uma análise bem-sucedida.
+Este fluxo não chama o Codex CLI nem outra IA ou API. O comando `run` permanece no programa e ainda inicia uma sessão do Codex por tela; ele não faz parte da coleta, da importação, da conferência nem da publicação.
 
 ## Instalação
 
@@ -29,12 +28,20 @@ O PAT fica fora do JSON. O bot lê `AZURE_DEVOPS_PAT` ou `AZURE_PAT`. Um arquivo
 
 ```bash
 .venv/bin/python -m teladoc_bot check --config config.json
-.venv/bin/python -m teladoc_bot run --config config.json
-.venv/bin/python -m teladoc_bot run --config config.json --limit 1
-.venv/bin/python -m teladoc_bot run --config config.json --publish
+.venv/bin/python -m teladoc_bot collect --config config.json
+.venv/bin/python -m teladoc_bot collect --config config.json --only-id 30092
+.venv/bin/python -m teladoc_bot import --config config.json --package output/<execução>/pacote --from respostas/
+.venv/bin/python -m teladoc_bot review --config config.json --package output/<execução>/pacote
+.venv/bin/python -m teladoc_bot publish --config config.json --package output/<execução>/pacote
 ```
 
-`--publish` atualiza a descrição e os critérios de aceite. `--no-publish` mantém a execução local mesmo quando o JSON habilita publicação. `--only-id` restringe a US. `--limit` limita a quantidade de telas analisadas.
+`collect` lê as linhas elegíveis, a US e o clone local, e grava o pacote em `output/<execução>/pacote`. `--limit` limita a quantidade exportada. `--only-id` exporta uma US. O pacote traz a identificação, o caminho do clone, as observações, as referências Figma do prompt e as evidências encontradas no RetaguardaWeb: caminhos e trechos literais de rotas, componentes, templates, formulários e serviços. Se a tela não for localizada com segurança, o pacote registra essa limitação e não inventa comportamento. Credenciais não entram nos arquivos.
+
+`import` lê o diretório indicado por `--from`. Cada resposta é um JSON, ou um Markdown com um objeto JSON, e precisa trazer `work_item_id` e o `screen_name` da tela. A validação existente confere o schema prático, os caminhos reais, as keys e os seletores. Conteúdo ausente, inválido ou associado a outro ID fica bloqueado e não segue para publicação.
+
+`review` relê a planilha, mostra o resultado de cada tela e não publica nem altera `Documentação`.
+
+`publish` localiza de novo a linha pelo ID da US, publica somente o que estiver aprovado e marca `Documentação = Sim` depois da releitura. Se a US já contiver o texto esperado, a marcação acontece sem um novo envio. Uma falha mantém `Não`, registra o motivo e segue para a próxima tela.
 
 ## Seleção
 
@@ -42,18 +49,15 @@ Entra na fila a linha com documentação igual a `Não`, status igual a `CRUD` e
 
 O link aceito aponta para `/_workitems/edit/{id}` ou `/_apis/wit/workitems/{id}` em `dev.azure.com` ou `visualstudio.com`.
 
-## Fluxo de cada tela
+## Fluxo
 
-1. Lê a próxima linha elegível e extrai o ID da US.
-2. Consulta título, descrição, critérios, relações e comentários.
-3. Monta o prompt com `prompts/documentacao_tela.md`, os dados da linha, a US e o caminho do clone.
-4. Inicia `codex exec` em sessão efêmera, no sandbox somente leitura, com memórias e multissessão desligadas.
-5. Valida o JSON, os caminhos reais, as keys e os seletores citados.
-6. Salva a documentação e as evidências em `output/<execução>/`.
-7. Com `--publish`, envia a descrição e os critérios, lê a US de novo e compara o conteúdo.
-8. Marca `Documentação = Sim` somente depois dessa confirmação.
+1. `collect` lê a próxima linha elegível, consulta a US, busca a tela no clone e exporta o Markdown de contexto com os trechos encontrados.
+2. A elaboração da descrição e dos critérios é feita fora do bot, a partir desse pacote.
+3. `import` amarra o conteúdo à tela, à linha e ao work item e aplica a validação já existente.
+4. `review` permite conferir o resultado antes de qualquer gravação no Azure ou na planilha.
+5. `publish` envia a descrição e os critérios, ou confirma que eles já estão na US, e só então altera a coluna de documentação.
 
-Uma falha, uma pendência ou `needs_review` mantém `Não`, grava o motivo e passa para a próxima linha. A mesma US não é analisada duas vezes na mesma execução.
+Uma falha, uma pendência ou `needs_review` mantém `Não`, grava o motivo e passa para a próxima linha. A mesma US não entra duas vezes no mesmo pacote.
 
 O clone não recebe edição, instalação, migration, build, teste, commit ou push. A análise insuficiente volta como pendência e não é publicada.
 
@@ -63,4 +67,4 @@ O clone não recebe edição, instalação, migration, build, teste, commit ou p
 - `1`: configuração, dependência ou falha que impediu o início.
 - `2`: ao menos uma tela ficou pendente, em revisão ou sem confirmação da planilha.
 
-Uma análise pronta com publicação desligada termina como `documentada_local` e mantém a planilha em `Não`.
+No fluxo separado, o código 2 indica tela bloqueada, pendente, em revisão ou sem confirmação da planilha. A conferência não altera `Documentação`. O comando `run`, quando a publicação está desligada, continua registrando `documentada_local` e mantém `Não`.

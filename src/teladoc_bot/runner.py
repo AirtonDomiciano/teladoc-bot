@@ -210,8 +210,59 @@ def _publish(
     assert row.work_item is not None
     description_html = markdown_to_html(analysis.documentation_markdown)
     acceptance_html = acceptance_criteria_html(analysis.acceptance_criteria)
+    folder.mkdir(parents=True, exist_ok=True)
     (folder / "documentacao.html").write_text(description_html, encoding="utf-8")
     (folder / "criterios.html").write_text(acceptance_html, encoding="utf-8")
+
+    def confirmed(remote, *, sent: bool) -> tuple[bool, bool]:
+        description_ok = canonical_text(description_html) == canonical_text(remote.description_html)
+        acceptance_ok = canonical_text(acceptance_html) == canonical_text(remote.acceptance_html)
+        _write_json(
+            folder / "confirmacao.json",
+            {
+                "description_ok": description_ok,
+                "acceptance_ok": acceptance_ok,
+                "already_present": not sent,
+                "sent_description": canonical_text(description_html),
+                "remote_description": canonical_text(remote.description_html),
+                "sent_acceptance": canonical_text(acceptance_html),
+                "remote_acceptance": canonical_text(remote.acceptance_html),
+            },
+        )
+        return description_ok, acceptance_ok
+
+    def mark(reason: str) -> ItemResult:
+        try:
+            mark_documented(
+                config.spreadsheet_path,
+                config.sheet,
+                config.header_row,
+                config.columns,
+                row.excel_row,
+                row.work_item,
+            )
+        except Exception as exc:
+            return _finish(
+                folder,
+                row,
+                "falha_planilha",
+                f"A US foi confirmada, mas a planilha não foi marcada como Sim. {exc}",
+                False,
+            )
+        return _finish(folder, row, "publicada", reason, True)
+
+    try:
+        current = azure.get_work_item(row.work_item)
+    except AzureError as exc:
+        return _finish(
+            folder,
+            row,
+            "pendente",
+            f"Falha ao ler a US antes da publicação. A planilha não foi alterada. {exc}",
+            False,
+        )
+    if all(confirmed(current, sent=False)):
+        return mark("A US já continha a documentação validada. A planilha foi confirmada.")
     try:
         azure.update_documentation(row.work_item, description_html, acceptance_html)
     except AzureError as exc:
@@ -226,19 +277,7 @@ def _publish(
             f"A atualização foi enviada, mas a releitura da US falhou. A planilha não foi alterada. {exc}",
             False,
         )
-    description_ok = canonical_text(description_html) == canonical_text(remote.description_html)
-    acceptance_ok = canonical_text(acceptance_html) == canonical_text(remote.acceptance_html)
-    _write_json(
-        folder / "confirmacao.json",
-        {
-            "description_ok": description_ok,
-            "acceptance_ok": acceptance_ok,
-            "sent_description": canonical_text(description_html),
-            "remote_description": canonical_text(remote.description_html),
-            "sent_acceptance": canonical_text(acceptance_html),
-            "remote_acceptance": canonical_text(remote.acceptance_html),
-        },
-    )
+    description_ok, acceptance_ok = confirmed(remote, sent=True)
     if not description_ok or not acceptance_ok:
         return _finish(
             folder,
@@ -247,24 +286,7 @@ def _publish(
             "A US foi atualizada, mas o conteúdo relido difere do enviado. Documentação permanece Não.",
             False,
         )
-    try:
-        mark_documented(
-            config.spreadsheet_path,
-            config.sheet,
-            config.header_row,
-            config.columns,
-            row.excel_row,
-            row.work_item,
-        )
-    except Exception as exc:
-        return _finish(
-            folder,
-            row,
-            "falha_planilha",
-            f"A US foi confirmada, mas a planilha não foi marcada como Sim. {exc}",
-            False,
-        )
-    return _finish(folder, row, "publicada", "Descrição, critérios de aceite e planilha confirmados.", True)
+    return mark("Descrição, critérios de aceite e planilha confirmados.")
 
 
 def _write_analysis(folder: Path, analysis: Analysis) -> None:
