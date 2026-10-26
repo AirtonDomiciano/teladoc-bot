@@ -51,7 +51,7 @@ def build_prompt(
         f"- Linha da planilha: {row.excel_row}",
         f"- Nome da tela: {_or_empty(row.screen_name)}",
         f"- Documentação: {_or_empty(row.documentation)}",
-        f"- Status: {_or_empty(row.status)}",
+        f"- Classificação da coluna F: {_or_empty(row.status)}",
         f"- Link Azure: {_or_empty(row.azure_link)}",
         f"- ID da US: {row.work_item.id}",
         f"- Organização: {row.work_item.organization}",
@@ -84,8 +84,8 @@ def build_prompt(
         "",
         "## Clone local do RetaguardaWeb",
         str(retaguarda_path),
-        "Esse diretório é a raiz de leitura desta sessão. Consulte AGENTS.md quando existir.",
-        "Não edite o clone e não grave arquivos nele. A resposta estruturada é o único resultado esperado.",
+        "O bot já leu esse clone e colocou as evidências abaixo. Não execute comandos e não abra outros arquivos.",
+        "A resposta estruturada é o único resultado esperado.",
     ]
     return "\n".join(parts).strip() + "\n"
 

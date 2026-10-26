@@ -13,17 +13,18 @@ Estas referências valem para todas as telas. Inclua-as nas seções indicadas m
 - Seção 4, Figma DS: https://www.figma.com/design/aIE4czmTg58S6BvpKi3Ue1/DS---Extension?node-id=6472-19276&node-type=canvas
 - Seção 5, padrão de desenho de Produtos: https://www.figma.com/design/Z72rFe7HWnNuCmmppWfiKN/Cadastro-de-produtos?node-id=213-10103
 
-## Leitura obrigatória
+## Material já preparado
 
-- Leia as instruções aplicáveis do repositório, inclusive `AGENTS.md` na raiz e nos subprojetos, quando esses arquivos existirem.
-- Localize a tela pelas rotas, pelos menus e pelos componentes. Use o nome da planilha, o título da US e os termos das observações.
-- Confirme a implementação no código antes de descrevê-la.
-- O clone é somente leitura. Não edite arquivos, não instale dependências, não execute migrations, não faça commit ou push e não rode build nem testes da aplicação.
-- Pode usar apenas comandos de leitura e busca. Não grave arquivos no clone. A resposta estruturada é o único resultado.
+O bot já localizou a tela e colou as evidências no final deste prompt. Essa seção é a única fonte de código.
 
-## O que analisar
+- Não execute comandos. Não abra arquivos. Não procure `AGENTS.md`, documentação de front, `src/generated` nem componentes compartilhados que não estejam nas evidências.
+- Não complemente lacuna com busca no clone. Se faltar arquivo, key, contrato ou regra essencial, use `pending`.
+- Escreva a documentação e os critérios a partir das evidências, da US e da planilha.
+- O clone continua somente leitura. Não edite arquivos, não instale dependências, não execute migrations, não faça commit ou push e não rode build nem testes.
 
-Conforme a tela exigir, abra e use como evidência:
+## O que as evidências cobrem
+
+Use somente o que estiver colado nas evidências preparadas:
 
 - templates HTML;
 - componentes TypeScript;
@@ -31,10 +32,9 @@ Conforme a tela exigir, abra e use como evidência:
 - arquivos Formly e `.fields.ts`;
 - services;
 - models e contratos;
-- componentes padrão já usados em telas migradas;
-- consumidores de rotas, modais e eventos de retorno.
+- rotas que referenciam o diretório da tela.
 
-A documentação precisa cobrir, quando existirem no código:
+A documentação precisa cobrir, quando aparecerem nessas evidências:
 
 - caminhos reais dos arquivos consultados;
 - componentes atuais e os componentes que devem substituí-los;
@@ -45,7 +45,18 @@ A documentação precisa cobrir, quando existirem no código:
 - identificadores e payload de gravação;
 - dependências e comportamentos que devem ser preservados.
 
+## Classificação da coluna F
+
+A classificação enviada em "Dados da linha" como "Classificação da coluna F" é a fonte de verdade do escopo. Não reclassifique a tela pelo código.
+
+- `CRUD`: cadastro no escopo. Documente a padronização e preserve o fluxo real confirmado no código.
+- `HARD CRUD`: fora do escopo atual. Use `status: needs_review`, explique em `needs_review_reason` que a coluna F é HARD CRUD e não produza documentação genérica.
+
+Modal, integração com outras telas, situação por filial, edição em grade e gravação em lote não justificam `needs_review` nem `pending` quando a classificação é `CRUD`. Descreva esses comportamentos como fluxo a preservar.
+
 ## Padrão de implementação
+
+A padronização troca o componente e mantém o funcionamento da tela. Não converta edição em grade em drawer, navegação nova ou cadastro separado.
 
 - Formulários reativos integrados ao Formly.
 - Campos e layout em arquivos `.fields.ts`.
@@ -54,14 +65,17 @@ A documentação precisa cobrir, quando existirem no código:
 - Grades usam `app-base-table`.
 - `tableId` precisa ser exclusivo.
 - `uniqueIdField` precisa ser o identificador real encontrado no código. Se a tela não tiver grade, registre `uniqueIdField: não se aplica` e explique o motivo.
+- Se o usuário edita e grava na grade, documente essa edição e essa gravação. Drawer só entra na documentação quando o código abre um drawer.
 
 ## Quando não publicar
 
 Não invente campos, caminhos, propriedades, registros Formly ou contratos.
 
 - Se faltar confirmação de arquivo, key, validação, payload, filtro ou permissão essencial, use `status: pending` e explique a lacuna em `pending_reason`.
-- Se o código mostrar complexidade incompatível com CRUD simples, como wizard, várias entidades, orquestração entre telas ou regra que não cabe em listagem e drawer, use `status: needs_review`, explique em `needs_review_reason` e mantenha a tela fora de uma documentação genérica.
-- As observações da planilha são restrições da tela. Se elas impedirem uma documentação CRUD confiável, respeite a restrição com `pending` ou `needs_review`.
+- Contrato não confirmado no código também fica em `pending`. Não complete a lacuna por semelhança com outra tela.
+- A classificação `HARD CRUD` fica em `needs_review`, como definido acima.
+- Com classificação `CRUD`, não use `needs_review` por modal, integração com outras telas, situação por filial, edição em grade, gravação em lote ou porque o fluxo não é um drawer.
+- As observações da planilha são restrições da tela. Se elas impedirem confirmar um comportamento essencial, use `pending` e cite a restrição.
 - Além das duas referências gerais de Figma, outros links e referências de levantamento só entram se aparecerem na US, em comentário, relação ou observação. A ausência de um Figma específico da US não impede `ready` quando a implementação foi confirmada no código.
 
 `pending_reason` fica vazio quando o status é `ready` ou `needs_review`. `needs_review_reason` fica vazio quando o status é `ready` ou `pending`.
@@ -85,7 +99,7 @@ Não invente campos, caminhos, propriedades, registros Formly ou contratos.
 ## 13. Cuidados específicos
 ## 14. Critérios de aceite verificáveis
 
-Adapte o conteúdo ao fluxo real. Não troque os títulos.
+Adapte o conteúdo ao fluxo real. Não troque os títulos. Na seção 10, descreva o cadastro como o código funciona. Se a operação for edição em grade, modal, situação por filial ou gravação em lote, registre esse fluxo. Não prescreva drawer no lugar dele.
 
 Na seção 4, escreva o link geral do Figma DS. Na seção 5, escreva o link geral do padrão de desenho de Produtos. Não substitua esses links por "Não confirmado na US."
 

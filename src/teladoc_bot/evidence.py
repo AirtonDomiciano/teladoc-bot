@@ -102,6 +102,70 @@ def resolve_screen_directory(root: Path, relative: str) -> str:
     return relative_dir
 
 
+def prepare_writing_evidence(
+    root: Path,
+    screen_name: str,
+    sources: tuple[SourceFile, ...] | None = None,
+) -> tuple[bool, str]:
+    """Monta o material de uma tela. A primeira posição indica se o Codex deve ser chamado."""
+    indexed = index_sources(root) if sources is None else sources
+    tokens = _tokens(screen_name)
+    if not tokens:
+        text = "\n".join(
+            [
+                "## Evidências preparadas pelo bot",
+                "",
+                "A implementação não foi localizada com segurança: o nome da tela não fornece um termo buscável.",
+                "Nenhum componente, comportamento ou regra foi inferido.",
+            ]
+        )
+        return False, text + "\n"
+    anchors = _anchors(indexed, tokens)
+    located = [anchor for anchor in anchors if _has_screen_file(anchors[anchor])]
+    if len(located) != 1:
+        lines = ["## Evidências preparadas pelo bot", ""]
+        lines.extend(_limitation(screen_name, located or list(anchors)))
+        return False, "\n".join(lines) + "\n"
+    anchor = located[0]
+    directory_match = _directory_matches(Path(anchor).name, tokens)
+    own_files = _writing_files(root, anchor, anchors[anchor], tokens, directory_match)
+    routes = _external_routes(root, anchor, indexed, directory_match=directory_match)
+    lines = [
+        "## Evidências preparadas pelo bot",
+        "",
+        f"Diretório da tela: `{anchor or '.'}`",
+        "O conteúdo abaixo foi lido localmente. Não execute comandos e não abra outros arquivos.",
+        "O que não aparece aqui não foi confirmado e não deve ser tratado como regra da tela.",
+        "",
+    ]
+    if not own_files and not routes:
+        lines.append("Nenhum arquivo da tela foi lido.")
+        return False, "\n".join(lines) + "\n"
+    for relative in own_files:
+        lines.append(f"- `{relative}`")
+    for source in routes:
+        lines.append(f"- `{source.relative}` (trecho da rota que referencia a tela)")
+    lines.append("")
+    for relative in own_files:
+        lines.append(f"### `{relative}`")
+        lines.append("")
+        lines.extend(_numbered_file(root / relative))
+        lines.append("")
+    if routes:
+        lines.append("### Rotas que referenciam a tela")
+        lines.append("")
+        for source in routes:
+            lines.append(f"`{source.relative}`")
+            lines.append("")
+            excerpt = _excerpt(root, source.relative, "rota", _route_needle(anchor) if directory_match else "")
+            if excerpt:
+                lines.extend(f"    {line}" for line in excerpt)
+            else:
+                lines.append("    [sem trecho classificado; o conteúdo não foi reproduzido]")
+            lines.append("")
+    return True, "\n".join(lines).rstrip() + "\n"
+
+
 def render_evidence(
     root: Path,
     screen_name: str,
@@ -230,6 +294,59 @@ def _route_reference_excerpt(root: Path, relative: str, needle: str) -> list[str
         if len(chosen) >= 30:
             break
     return chosen
+
+
+def _writing_files(
+    root: Path,
+    anchor: str,
+    sources: list[SourceFile],
+    tokens: list[str],
+    directory_match: bool,
+) -> list[str]:
+    if not directory_match:
+        selected = [source.relative for source in _files_for_anchor(anchor, sources, tokens)]
+        return sorted(set(selected))
+    base = root / anchor
+    found: list[str] = []
+    if not base.is_dir():
+        return found
+    for path in base.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        if any(part in _SKIP_DIRS for part in relative.parts):
+            continue
+        name = path.name
+        if name.endswith(".spec.ts"):
+            continue
+        if name.endswith(
+            (
+                ".component.ts",
+                ".component.html",
+                ".html",
+                ".service.ts",
+                ".fields.ts",
+                ".routing.ts",
+                ".routes.ts",
+                ".module.ts",
+                "-model.ts",
+                "-consts.ts",
+            )
+        ):
+            found.append(relative.as_posix())
+    return sorted(set(found))
+
+
+def _numbered_file(path: Path) -> list[str]:
+    try:
+        if path.stat().st_size > 1_500_000:
+            return ["[conteúdo truncado: o arquivo passa do limite de leitura]"]
+        content = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ["[arquivo não pôde ser lido]"]
+    if not content:
+        return ["[arquivo vazio]"]
+    return [f"{number}: {line}" for number, line in enumerate(content.splitlines(), start=1)]
 
 
 def _anchors(sources: tuple[SourceFile, ...], tokens: list[str]) -> dict[str, list[SourceFile]]:

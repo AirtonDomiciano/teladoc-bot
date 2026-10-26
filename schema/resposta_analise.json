@@ -15,7 +15,7 @@
     "status": {
       "type": "string",
       "enum": ["ready", "pending", "needs_review"],
-      "description": "ready publica; pending registra lacuna; needs_review registra complexidade acima de CRUD simples."
+      "description": "ready publica a tela classificada como CRUD quando a evidência foi confirmada; pending registra falta de evidência ou contrato não confirmado; needs_review registra classificação HARD CRUD."
     },
     "screen_name": {
       "type": "string",

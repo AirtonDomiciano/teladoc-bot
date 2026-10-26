@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from teladoc_bot.evidence import render_evidence, resolve_screen_directory
+from teladoc_bot.evidence import prepare_writing_evidence, render_evidence, resolve_screen_directory
 from teladoc_bot.prompting import PromptError
 
 
@@ -90,6 +90,38 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("src/app/pages/clientes/clientes.module", text)
         self.assertNotIn("<p>extra</p>", text)
         self.assertNotIn("Há mais de um diretório", text)
+
+    def test_writing_evidence_includes_the_whole_screen_file_and_skips_codex_when_ambiguous(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(
+                root,
+                {
+                    "src/app/pages/clientes/clientes.component.ts": "@Component({ selector: 'app-clientes' })\nexport class ClientesComponent { campo = 'inteiro'; }\n",
+                    "src/app/pages/clientes/clientes.module.ts": "export class ClientesModule {}\n",
+                    "src/app/pages/clientes-extra/clientes-extra.component.html": "<p>extra</p>\n",
+                },
+            )
+            ready, text = prepare_writing_evidence(root, "Clientes")
+        self.assertFalse(ready)
+        self.assertIn("Há mais de um diretório compatível", text)
+        self.assertNotIn("campo = 'inteiro'", text)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(
+                root,
+                {
+                    "src/app/pages/clientes/clientes.component.ts": "@Component({ selector: 'app-clientes' })\nexport class ClientesComponent { campo = 'inteiro'; }\n",
+                    "src/app/pages/clientes/clientes.module.ts": "export class ClientesModule {}\n",
+                },
+            )
+            ready, text = prepare_writing_evidence(root, "Clientes")
+        self.assertTrue(ready)
+        self.assertIn("1: @Component({ selector: 'app-clientes' })", text)
+        self.assertIn("campo = 'inteiro'", text)
+        self.assertIn("clientes.module.ts", text)
+        self.assertIn("Não execute comandos", text)
 
     def test_screen_dir_must_stay_inside_the_clone(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -110,7 +110,8 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("https://figma.example/ds", prompt)
         self.assertIn(str(self.clone), prompt)
         self.assertIn("teladoc-prompt-version: 1", prompt)
-        self.assertIn("AGENTS.md", prompt)
+        self.assertIn("Não execute comandos", prompt)
+        self.assertIn("Evidências preparadas pelo bot", prompt)
         document = next((self.output.rglob("documentacao.md")))
         self.assertIn("nomeCliente", document.read_text(encoding="utf-8"))
 
@@ -172,6 +173,9 @@ class RunnerTests(unittest.TestCase):
             ]
         )
         config = write_config(self.root, self.sheet, self.clone, self.output)
+        self._seed_screen("primeira")
+        self._seed_screen("segunda")
+        self._seed_screen("terceira")
         review = ready_payload(self.paths)
         review["status"] = "needs_review"
         review["needs_review_reason"] = "A tela controla um wizard de três etapas."
@@ -220,6 +224,8 @@ class RunnerTests(unittest.TestCase):
             ]
         )
         config = write_config(self.root, self.sheet, self.clone, self.output)
+        self._seed_screen("primeira")
+        self._seed_screen("segunda")
         work_item, comments = sample_work_item()
         with self.assertRaises(CodexUnavailable):
             execute(
@@ -236,6 +242,37 @@ class RunnerTests(unittest.TestCase):
         summary = json.loads(next(self.output.rglob("resumo.json")).read_text(encoding="utf-8"))
         self.assertEqual(summary["results"][0]["outcome"], "pendente")
         self.assertEqual(len(summary["results"]), 1)
+
+    def test_unlocated_screen_does_not_call_codex(self) -> None:
+        self._sheet([["Zzzinexistente", "Não", "CRUD", LINK.format(id=10), ""]])
+        config = write_config(self.root, self.sheet, self.clone, self.output)
+        work_item, comments = sample_work_item()
+        executor = FakeExecutor([ready_payload(self.paths)])
+        azure = FakeAzure(work_item, comments)
+        report = execute(
+            config,
+            executor=executor,
+            azure=azure,
+            publish=True,
+            limit=None,
+            only_id=None,
+            log=lambda _m: None,
+        )
+        self.assertEqual(report.exit_code, 2)
+        self.assertEqual(report.results[0].outcome, "pendente")
+        self.assertIn("O Codex não foi chamado", report.results[0].reason)
+        self.assertEqual(executor.prompts, [])
+        self.assertEqual(self._cell("G2"), "Não")
+        self.assertEqual(azure.updates, [])
+
+    def _seed_screen(self, name: str) -> None:
+        folder = self.clone / "src" / "app" / "pages" / name
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{name}.component.ts").write_text(
+            "@Component({ selector: 'app-tela' })\nexport class Tela {}\n",
+            encoding="utf-8",
+        )
+        (folder / f"{name}.component.html").write_text("<form></form>\n", encoding="utf-8")
 
     def _sheet(self, rows: list[list[object]]) -> None:
         write_workbook(self.sheet, rows)

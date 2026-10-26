@@ -18,7 +18,7 @@ PYTHONPATH=src .venv/bin/python -m teladoc_bot run --config config.json --only-i
 
 ### Durante a execução
 
-- Use o executor e o prompt padrão já implementados.
+- Use o executor e o prompt padrão já implementados. O bot prepara as evidências da tela; o Codex só escreve a documentação a partir desse material.
 - Preserve as validações existentes.
 - Publique somente se a análise for aprovada. Marque `SIM` na planilha apenas depois de confirmar o conteúdo no Azure.
 - Se houver bloqueio, informe o motivo. Não contorne a validação.
