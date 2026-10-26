@@ -10,7 +10,7 @@ from pathlib import Path
 from teladoc_bot.azure import AzureDevOpsClient, AzureError, Comment, WorkItem
 from teladoc_bot.codex import CodexExecutor, CodexUnavailable
 from teladoc_bot.config import Config
-from teladoc_bot.evidence import index_sources, prepare_writing_evidence
+from teladoc_bot.evidence import index_sources, prepare_writing_evidence, resolve_screen_directory
 from teladoc_bot.htmlutil import acceptance_criteria_html, markdown_to_html
 from teladoc_bot.prompting import PromptError, build_prompt, read_base_prompt
 from teladoc_bot.spreadsheet import SheetRow, load_rows, mark_documented
@@ -47,6 +47,7 @@ def execute(
     publish: bool,
     limit: int | None,
     only_id: int | None,
+    screen_dir: str | None = None,
     log=print,
 ) -> RunReport:
     if not config.retaguarda_path.is_dir():
@@ -55,6 +56,11 @@ def execute(
     _require_schema(config.schema_path)
     version = executor.ensure_available()
     rows = load_rows(config.spreadsheet_path, config.sheet, config.header_row, config.columns)
+    resolved_dir = resolve_screen_directory(config.retaguarda_path, screen_dir) if screen_dir else ""
+    if resolved_dir and only_id is None and limit != 1:
+        targeted = [row for row in rows if row.skip_reason is None]
+        if len(targeted) != 1:
+            raise PromptError("O diretório da tela vale para uma única US. Informe --only-id ou --limit 1.")
     if publish and azure is None:
         raise PromptError("A publicação foi habilitada sem um cliente do Azure DevOps.")
     if any(row.skip_reason is None for row in rows) and azure is None:
@@ -114,6 +120,7 @@ def execute(
                     base_prompt=base_prompt,
                     prompt_version=prompt_version,
                     sources=sources,
+                    screen_dir=resolved_dir or None,
                 )
             except CodexUnavailable as exc:
                 result = ItemResult(row.excel_row, row.screen_name, row.work_item.id, "pendente", str(exc), False)
@@ -154,6 +161,7 @@ def _process_row(
     base_prompt: str,
     prompt_version: str,
     sources,
+    screen_dir: str | None = None,
 ) -> ItemResult:
     assert row.work_item is not None and azure is not None
     folder = run_dir / f"linha-{row.excel_row:04d}-wi-{row.work_item.id}-{slugify(row.screen_name)}"
@@ -163,7 +171,12 @@ def _process_row(
         comments = azure.get_comments(row.work_item)
     except AzureError as exc:
         return _finish(folder, row, "pendente", str(exc), False)
-    ready, evidence = prepare_writing_evidence(config.retaguarda_path, row.screen_name, sources)
+    ready, evidence = prepare_writing_evidence(
+        config.retaguarda_path,
+        row.screen_name,
+        sources,
+        screen_dir=screen_dir,
+    )
     (folder / "evidencia.md").write_text(evidence, encoding="utf-8")
     if not ready:
         return _finish(

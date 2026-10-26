@@ -121,7 +121,57 @@ class EvidenceTests(unittest.TestCase):
         self.assertIn("1: @Component({ selector: 'app-clientes' })", text)
         self.assertIn("campo = 'inteiro'", text)
         self.assertIn("clientes.module.ts", text)
-        self.assertIn("Não execute comandos", text)
+        self.assertIn("Não leia arquivo gerado inteiro", text)
+
+    def test_writing_evidence_uses_the_informed_directory_and_the_screen_it_opens(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(
+                root,
+                {
+                    "src/app/pages/lista/lista.component.ts": "this.router.navigate([`cadastro/${id}`]);\n",
+                    "src/app/pages/lista/lista.component.html": "<table></table>\n",
+                    "src/app/pages/outra/outra.component.html": "<p>nao</p>\n",
+                    "src/app/pages/cadastro/cadastro.component.ts": "export class Cadastro { campo = 'form'; }\n",
+                    "src/app/pages/cadastro/cadastro.component.html": "<form></form>\n",
+                    "src/app/app.routing-telas.ts": (
+                        "path: 'cadastro/:id',\n"
+                        "loadChildren: () => import('src/app/pages/cadastro/cadastro.module').then((m) => m.default),\n"
+                    ),
+                },
+            )
+            ready, text = prepare_writing_evidence(root, "Nome que nao bate", screen_dir="src/app/pages/lista")
+        self.assertTrue(ready)
+        self.assertIn("Diretório da tela: `src/app/pages/lista`", text)
+        self.assertIn("<table></table>", text)
+        self.assertIn("campo = 'form'", text)
+        self.assertIn("src/app/pages/cadastro", text)
+        self.assertNotIn("<p>nao</p>", text)
+        self.assertIn("Não leia arquivo gerado inteiro", text)
+
+    def test_ambiguous_navigation_does_not_add_a_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._write(
+                root,
+                {
+                    "src/app/pages/lista/lista.component.ts": "this.router.navigate([`cadastro/0`]);\n",
+                    "src/app/pages/lista/lista.component.html": "<table></table>\n",
+                    "src/app/pages/um/um.component.html": "<p>um</p>\n",
+                    "src/app/pages/dois/dois.component.html": "<p>dois</p>\n",
+                    "src/app/app.routing-telas.ts": (
+                        "path: 'cadastro/:id',\n"
+                        "loadChildren: () => import('src/app/pages/um/um.module').then((m) => m.default),\n"
+                        "path: 'cadastro/:id',\n"
+                        "loadChildren: () => import('src/app/pages/dois/dois.module').then((m) => m.default),\n"
+                    ),
+                },
+            )
+            ready, text = prepare_writing_evidence(root, "Outro nome", screen_dir="src/app/pages/lista")
+        self.assertTrue(ready)
+        self.assertIn("<table></table>", text)
+        self.assertNotIn("<p>um</p>", text)
+        self.assertNotIn("<p>dois</p>", text)
 
     def test_screen_dir_must_stay_inside_the_clone(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

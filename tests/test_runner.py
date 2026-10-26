@@ -110,7 +110,7 @@ class RunnerTests(unittest.TestCase):
         self.assertIn("https://figma.example/ds", prompt)
         self.assertIn(str(self.clone), prompt)
         self.assertIn("teladoc-prompt-version: 1", prompt)
-        self.assertIn("Não execute comandos", prompt)
+        self.assertIn("Não leia arquivo gerado inteiro", prompt)
         self.assertIn("Evidências preparadas pelo bot", prompt)
         document = next((self.output.rglob("documentacao.md")))
         self.assertIn("nomeCliente", document.read_text(encoding="utf-8"))
@@ -264,6 +264,27 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(executor.prompts, [])
         self.assertEqual(self._cell("G2"), "Não")
         self.assertEqual(azure.updates, [])
+
+    def test_screen_dir_documents_a_name_that_does_not_match_the_files(self) -> None:
+        self._sheet([["Zzzinexistente", "Não", "CRUD", LINK.format(id=10), ""]])
+        config = write_config(self.root, self.sheet, self.clone, self.output)
+        self._seed_screen("lista-confirmada")
+        work_item, comments = sample_work_item()
+        executor = FakeExecutor([ready_payload(self.paths)])
+        report = execute(
+            config,
+            executor=executor,
+            azure=FakeAzure(work_item, comments),
+            publish=True,
+            limit=None,
+            only_id=10,
+            screen_dir="src/app/pages/lista-confirmada",
+            log=lambda _m: None,
+        )
+        self.assertEqual(report.exit_code, 0)
+        self.assertEqual(report.results[-1].outcome, "publicada")
+        self.assertIn("lista-confirmada.component.html", executor.prompts[0])
+        self.assertIn("<form></form>", executor.prompts[0])
 
     def _seed_screen(self, name: str) -> None:
         folder = self.clone / "src" / "app" / "pages" / name

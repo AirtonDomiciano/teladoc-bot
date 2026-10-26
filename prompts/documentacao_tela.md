@@ -2,7 +2,7 @@ teladoc-prompt-version: 1
 
 # Documentação de tela CRUD
 
-Você analisa uma única tela do clone local do RetaguardaWeb e devolve a documentação para a User Story correspondente. Esta sessão é exclusiva desta tela. Não use memória, histórico ou conclusão de outra tela.
+Você documenta a padronização visual de uma única tela do frontend Angular do RetaguardaWeb. A tarefa é exclusivamente a troca dos componentes visuais. Não é refatoração de lógica nem alteração de backend. Esta sessão é exclusiva desta tela. Não use memória, histórico ou conclusão de outra tela.
 
 A descrição atual da US será substituída por esta documentação quando a publicação estiver habilitada. Carregue para o texto novo as referências gerais abaixo e somente as demais referências, links e restrições que estejam confirmados na US, nos comentários, nas relações ou nas observações da planilha.
 
@@ -15,39 +15,21 @@ Estas referências valem para todas as telas. Inclua-as nas seções indicadas m
 
 ## Material já preparado
 
-O bot já localizou a tela e colou as evidências no final deste prompt. Essa seção é a única fonte de código.
+O bot colou as evidências da tela no final deste prompt. Comece por elas.
 
-- Não execute comandos. Não abra arquivos. Não procure `AGENTS.md`, documentação de front, `src/generated` nem componentes compartilhados que não estejam nas evidências.
-- Não complemente lacuna com busca no clone. Se faltar arquivo, key, contrato ou regra essencial, use `pending`.
-- Escreva a documentação e os critérios a partir das evidências, da US e da planilha.
-- O clone continua somente leitura. Não edite arquivos, não instale dependências, não execute migrations, não faça commit ou push e não rode build nem testes.
+Analise o template, o componente e a configuração dos campos. Identifique os componentes visuais atuais e os substitutos do padrão já definido. Preserve os bindings, as validações, as permissões e os eventos necessários para o comportamento atual. Descreva listagem, cadastro, drawer ou edição em grade conforme o fluxo real.
 
-## O que as evidências cobrem
+Preserve chamadas de serviços, payloads, cálculos, filtros, regras, eventos e integrações existentes. Não as redesenhe. Consulte uma dependência do frontend somente quando for necessário para entender como preservar esses vínculos.
 
-Use somente o que estiver colado nas evidências preparadas:
-
-- templates HTML;
-- componentes TypeScript;
-- módulos;
-- arquivos Formly e `.fields.ts`;
-- services;
-- models e contratos;
-- rotas que referenciam o diretório da tela.
-
-A documentação precisa cobrir, quando aparecerem nessas evidências:
-
-- caminhos reais dos arquivos consultados;
-- componentes atuais e os componentes que devem substituí-los;
-- campos e keys reais;
-- validações, obrigatoriedade, limites e defaults;
-- permissões e somente leitura;
-- consultas, filtros e paginação;
-- identificadores e payload de gravação;
-- dependências e comportamentos que devem ser preservados.
+- Não investigue backend, banco, resolvers ou implementação das APIs.
+- Não exija detalhar contratos GraphQL para aprovar a mudança visual.
+- Não leia arquivos gerados inteiros, inclusive `src/generated`.
+- Não use `pending` por falta de contrato, payload ou implementação de API. Use `pending` somente quando a lacuna impedir especificar a alteração visual com segurança.
+- O clone é somente leitura. Não edite arquivos, não instale dependências, não execute migrations, não faça commit ou push e não rode build nem testes.
 
 ## Classificação da coluna F
 
-A classificação enviada em "Dados da linha" como "Classificação da coluna F" é a fonte de verdade do escopo. Não reclassifique a tela pelo código.
+A classificação enviada em "Dados da linha" como "Classificação da coluna F" é a fonte de verdade do escopo. Não reclassifique a tela pelo código. Lógica ou integração existente não tira uma tela `CRUD` do escopo.
 
 - `CRUD`: cadastro no escopo. Documente a padronização e preserve o fluxo real confirmado no código.
 - `HARD CRUD`: fora do escopo atual. Use `status: needs_review`, explique em `needs_review_reason` que a coluna F é HARD CRUD e não produza documentação genérica.
@@ -69,10 +51,10 @@ A padronização troca o componente e mantém o funcionamento da tela. Não conv
 
 ## Quando não publicar
 
-Não invente campos, caminhos, propriedades, registros Formly ou contratos.
+Não invente campos, caminhos, propriedades nem registros Formly.
 
-- Se faltar confirmação de arquivo, key, validação, payload, filtro ou permissão essencial, use `status: pending` e explique a lacuna em `pending_reason`.
-- Contrato não confirmado no código também fica em `pending`. Não complete a lacuna por semelhança com outra tela.
+- Se faltar o template, o componente, a configuração dos campos ou o componente visual que deve substituir o atual, use `status: pending` e explique a lacuna em `pending_reason`.
+- Não bloqueie a documentação porque o contrato GraphQL, o resolver ou a implementação da API não foram detalhados. Não complete lacuna por semelhança com outra tela.
 - A classificação `HARD CRUD` fica em `needs_review`, como definido acima.
 - Com classificação `CRUD`, não use `needs_review` por modal, integração com outras telas, situação por filial, edição em grade, gravação em lote ou porque o fluxo não é um drawer.
 - As observações da planilha são restrições da tela. Se elas impedirem confirmar um comportamento essencial, use `pending` e cite a restrição.
@@ -99,7 +81,7 @@ Não invente campos, caminhos, propriedades, registros Formly ou contratos.
 ## 13. Cuidados específicos
 ## 14. Critérios de aceite verificáveis
 
-Adapte o conteúdo ao fluxo real. Não troque os títulos. Na seção 10, descreva o cadastro como o código funciona. Se a operação for edição em grade, modal, situação por filial ou gravação em lote, registre esse fluxo. Não prescreva drawer no lugar dele.
+Adapte o conteúdo ao fluxo real. Não troque os títulos. Separe o que muda visualmente do que deve continuar funcionando. Na seção 10, descreva o cadastro como o código funciona. Se a operação for edição em grade, modal, situação por filial ou gravação em lote, registre esse fluxo. Não prescreva drawer no lugar dele. Na seção 11, registre a chamada, o payload e o tratamento já existentes como comportamento a preservar, sem propor outra gravação.
 
 Na seção 4, escreva o link geral do Figma DS. Na seção 5, escreva o link geral do padrão de desenho de Produtos. Não substitua esses links por "Não confirmado na US."
 

@@ -56,6 +56,10 @@ _SUFFIXES = (
     ".html",
     ".ts",
 )
+_NAVIGATE = re.compile(
+    r"""\.navigate\(\s*\[\s*[`'"]/?([A-Za-z0-9-]+)|routerLink\s*=\s*['"]\s*[`'"]/?([A-Za-z0-9-]+)"""
+)
+_ROUTE_TOKEN = re.compile(r"""\bpath\s*:\s*['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)""")
 
 
 @dataclass(frozen=True)
@@ -106,9 +110,12 @@ def prepare_writing_evidence(
     root: Path,
     screen_name: str,
     sources: tuple[SourceFile, ...] | None = None,
+    screen_dir: str | None = None,
 ) -> tuple[bool, str]:
     """Monta o material de uma tela. A primeira posição indica se o Codex deve ser chamado."""
     indexed = index_sources(root) if sources is None else sources
+    if screen_dir is not None:
+        return _writing_from_directory(root, screen_dir, indexed)
     tokens = _tokens(screen_name)
     if not tokens:
         text = "\n".join(
@@ -134,7 +141,7 @@ def prepare_writing_evidence(
         "## Evidências preparadas pelo bot",
         "",
         f"Diretório da tela: `{anchor or '.'}`",
-        "O conteúdo abaixo foi lido localmente. Não execute comandos e não abra outros arquivos.",
+        "O conteúdo abaixo foi lido localmente. Abra outra dependência do frontend somente para preservar um vínculo. Não leia arquivo gerado inteiro.",
         "O que não aparece aqui não foi confirmado e não deve ser tratado como regra da tela.",
         "",
     ]
@@ -164,6 +171,133 @@ def prepare_writing_evidence(
                 lines.append("    [sem trecho classificado; o conteúdo não foi reproduzido]")
             lines.append("")
     return True, "\n".join(lines).rstrip() + "\n"
+
+
+def _writing_from_directory(root: Path, screen_dir: str, sources: tuple[SourceFile, ...]) -> tuple[bool, str]:
+    """Cola o diretório confirmado e o cadastro que a própria tela abre."""
+    own_files = _writing_files(root, screen_dir, [], [], True)
+    linked = _linked_directories(root, screen_dir, own_files, sources)
+    for directory in linked:
+        own_files.extend(_writing_files(root, directory, [], [], True))
+    own_files = list(dict.fromkeys(own_files))
+    routes: list[tuple[SourceFile, str]] = []
+    for directory in [screen_dir, *linked]:
+        needle = _route_needle(directory)
+        for source in _external_routes(root, directory, sources, directory_match=True):
+            routes.append((source, needle))
+    lines = [
+        "## Evidências preparadas pelo bot",
+        "",
+        f"Diretório da tela: `{screen_dir}`",
+    ]
+    if linked:
+        lines.append("Diretórios abertos pela navegação desta tela:")
+        lines.extend(f"- `{directory}`" for directory in linked)
+    lines.extend(
+        [
+            "O conteúdo abaixo foi lido localmente. Abra outra dependência do frontend somente para preservar um vínculo. Não leia arquivo gerado inteiro.",
+            "O que não aparece aqui não foi confirmado e não deve ser tratado como regra da tela.",
+            "",
+        ]
+    )
+    if not _has_visual_file(own_files):
+        lines.append("O diretório informado não contém componente ou template.")
+        lines.append("Nenhum componente, comportamento ou regra foi inferido.")
+        return False, "\n".join(lines) + "\n"
+    for relative in own_files:
+        lines.append(f"- `{relative}`")
+    for source, _needle in routes:
+        lines.append(f"- `{source.relative}` (trecho da rota que referencia a tela)")
+    lines.append("")
+    for relative in own_files:
+        lines.append(f"### `{relative}`")
+        lines.append("")
+        lines.extend(_numbered_file(root / relative))
+        lines.append("")
+    if routes:
+        lines.append("### Rotas que referenciam a tela")
+        lines.append("")
+        for source, needle in routes:
+            lines.append(f"`{source.relative}`")
+            lines.append("")
+            excerpt = _excerpt(root, source.relative, "rota", needle)
+            if excerpt:
+                lines.extend(f"    {line}" for line in excerpt)
+            else:
+                lines.append("    [sem trecho classificado; o conteúdo não foi reproduzido]")
+            lines.append("")
+    return True, "\n".join(lines).rstrip() + "\n"
+
+
+def _linked_directories(
+    root: Path,
+    screen_dir: str,
+    files: list[str],
+    sources: tuple[SourceFile, ...],
+) -> list[str]:
+    segments: set[str] = set()
+    for relative in files:
+        segments.update(_navigation_segments(_read(root / relative)))
+    if not segments:
+        return []
+    found = {segment: set() for segment in segments}
+    for source in sources:
+        if source.kind != "rota":
+            continue
+        text = _read(root / source.relative)
+        if not text:
+            continue
+        for segment, imported in _route_imports(text):
+            if segment not in segments:
+                continue
+            directory = _module_directory(source.relative, imported)
+            if directory is None or directory == screen_dir or directory.startswith(screen_dir + "/"):
+                continue
+            if (root / directory).is_dir():
+                found[segment].add(directory)
+    chosen: list[str] = []
+    for segment in sorted(segments):
+        directories = found[segment]
+        if len(directories) == 1:
+            directory = next(iter(directories))
+            if directory not in chosen:
+                chosen.append(directory)
+    return chosen[:2]
+
+
+def _navigation_segments(text: str) -> set[str]:
+    return {segment for match in _NAVIGATE.finditer(text) for segment in match.groups() if segment and len(segment) > 2}
+
+
+def _route_imports(text: str) -> list[tuple[str, str]]:
+    pending: str | None = None
+    found: list[tuple[str, str]] = []
+    for match in _ROUTE_TOKEN.finditer(text):
+        path, imported = match.group(1), match.group(2)
+        if path is not None:
+            segment = path.split("/", 1)[0]
+            pending = segment if segment and not segment.startswith(":") else None
+            continue
+        if pending and imported:
+            found.append((pending, imported))
+            pending = None
+    return found
+
+
+def _module_directory(route_relative: str, imported: str) -> str | None:
+    cleaned = imported[:-3] if imported.endswith(".ts") else imported
+    if cleaned.startswith("."):
+        target = Path(route_relative).parent / cleaned
+    else:
+        target = Path(cleaned.lstrip("/"))
+    directory = target.parent.as_posix()
+    if directory in {"", "."}:
+        return None
+    return directory
+
+
+def _has_visual_file(files: list[str]) -> bool:
+    return any(Path(relative).name.endswith((".component.ts", ".component.html", ".html")) for relative in files)
 
 
 def render_evidence(

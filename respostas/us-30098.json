@@ -1,0 +1,11 @@
+{
+  "work_item_id": 30098,
+  "status": "pending",
+  "screen_name": "Inscrição estadual por estado",
+  "pending_reason": "A US 30098 está na linha 33, Inscrição estadual por estado, ainda com Documentação NÃO, e também na linha 55, Inscrição estadual, já com Documentação SIM. A publicação existente exige exatamente uma linha na coluna D e não será executada, para não alterar a US já confirmada.",
+  "needs_review_reason": "",
+  "evidence_notes": "A tela de inscrição por UF foi localizada em ie-uf, com grade UF, I.E e Remover. A publicação ficou bloqueada porque o mesmo ID aparece em duas linhas.",
+  "files_consulted": [],
+  "acceptance_criteria": [],
+  "documentation_markdown": "A tela foi localizada, mas a publicação fica pendente porque a US 30098 está em duas linhas da planilha."
+}

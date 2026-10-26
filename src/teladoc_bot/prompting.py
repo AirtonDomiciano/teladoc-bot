@@ -84,7 +84,7 @@ def build_prompt(
         "",
         "## Clone local do RetaguardaWeb",
         str(retaguarda_path),
-        "O bot já leu esse clone e colocou as evidências abaixo. Não execute comandos e não abra outros arquivos.",
+        "O bot colou as evidências da tela abaixo. Abra uma dependência do frontend somente para preservar um vínculo. Não leia arquivo gerado inteiro nem investigue backend.",
         "A resposta estruturada é o único resultado esperado.",
     ]
     return "\n".join(parts).strip() + "\n"

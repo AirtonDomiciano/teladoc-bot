@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
             publish=publish,
             limit=limit,
             only_id=args.only_id,
+            screen_dir=getattr(args, "screen_dir", None),
         )
     except (ConfigError, PromptError, CodexUnavailable, AzureError) as exc:
         print(str(exc), file=sys.stderr)
@@ -158,6 +159,10 @@ def _parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--no-publish", action="store_true", help="Mantém a publicação desligada nesta execução.")
     run_parser.add_argument("--limit", type=int, help="Quantidade máxima de telas analisadas nesta execução.")
     run_parser.add_argument("--only-id", type=int, help="Analisa somente a US com este ID.")
+    run_parser.add_argument(
+        "--screen-dir",
+        help="Diretório da tela relativo ao clone, já confirmado. Vale para uma única US.",
+    )
     collect_parser = subcommands.add_parser(
         "collect",
         parents=[common],
